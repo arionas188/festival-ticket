@@ -8,6 +8,12 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+function getMapsUrl(event) {
+  if (event.location_url) return event.location_url
+  const destination = event.location || event.title
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`
+}
+
 export default function InfoGeneral({ event }) {
   return (
     <Dialog>
@@ -36,20 +42,40 @@ export default function InfoGeneral({ event }) {
           </TabsList>
 
           <TabsContent value="general" className="mt-3 space-y-1">
-            <p className="font-medium text-foreground">{event?.name ?? "Εκδήλωση"}</p>
-            <p className="text-muted-foreground">{event?.title}</p>
-            {event?.date ? <p className="text-muted-foreground">Ημερομηνία: {event.date}</p> : null}
+            <p className="font-medium text-foreground">{event?.title}</p>
+            {event?.description && (
+              <p className="text-muted-foreground">{event.description}</p>
+            )}
+            {event?.date && (
+              <p className="text-muted-foreground">
+                Ημερομηνία:{" "}
+                {new Date(event.date).toLocaleString("el-GR", {
+                  dateStyle: "full",
+                  timeStyle: "short",
+                })}
+              </p>
+            )}
           </TabsContent>
 
-          <TabsContent value="place" className="mt-3">
+          <TabsContent value="place" className="mt-3 space-y-2">
             <p className="text-muted-foreground">
-              {event?.name ?? "Η τοποθεσία θα εμφανιστεί εδώ."}
+              {event?.location ?? "Η τοποθεσία θα ανακοινωθεί σύντομα."}
             </p>
+            {event?.location && (
+              <a
+                href={getMapsUrl(event)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-primary underline"
+              >
+                Άνοιγμα στο Google Maps
+              </a>
+            )}
           </TabsContent>
 
           <TabsContent value="notes" className="mt-3">
             <p className="text-muted-foreground">
-              Περισσότερες πληροφορίες για την εκδήλωση.
+              Περισσότερες πληροφορίες θα προστεθούν σύντομα.
             </p>
           </TabsContent>
         </Tabs>
