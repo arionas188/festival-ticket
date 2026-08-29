@@ -1,12 +1,7 @@
 import { MapPinIcon } from '@heroicons/react/20/solid'
-import Ticket from '../Ticket/Ticket'
-import InfoGeneral from '../Info/InfoGeneral'
-
-function getMapsUrl(event) {
-  if (event.location_url) return event.location_url
-  const destination = event.location || event.title
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`
-}
+import TicketDialog from './TicketDialog'
+import EventInfoDialog from './EventInfoDialog'
+import { getMapsUrl } from '../../lib/maps'
 
 function getStatus(event) {
   if (!event.capacity || event.capacity === 0) {
@@ -79,7 +74,7 @@ export default function EventsList({ events }) {
             <div>
               <div className="-mt-px flex divide-x divide-gray-200">
               <div className="flex min-w-0 flex-1">
-                <Ticket event={event} />
+                <TicketDialog event={event} />
               </div>
                 <div className="-ml-px flex min-w-0 flex-1">
                   <a
@@ -93,7 +88,7 @@ export default function EventsList({ events }) {
                   </a>
                 </div>
                 <div className="-ml-px flex min-w-0 flex-1">
-                  <InfoGeneral event={event} />
+                  <EventInfoDialog event={event} />
                 </div>              
             </div>
             </div>

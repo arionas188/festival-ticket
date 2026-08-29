@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react"
 import { TicketIcon } from "@heroicons/react/20/solid"
 import { Button } from "@/components/ui/button"
 import {
@@ -11,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { supabase } from "@/lib/supabase"
+import { useTickets } from "../../queries/useTickets"
 
 function getAvailabilityStatus(ticket) {
   const remaining = ticket.quantity - (ticket.quantity_sold || 0)
@@ -29,30 +28,8 @@ function getAvailabilityStatus(ticket) {
   return { label: `${remaining} διαθέσιμα`, color: "text-green-600", remaining }
 }
 
-export default function Ticket({ event }) {
-  const [tickets, setTickets] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    async function fetchTickets() {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from("tickets")
-        .select("*")
-        .eq("event_id", event.id)
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-
-      if (error) {
-        console.error("Tickets fetch error:", error)
-      } else {
-        setTickets(data)
-      }
-      setLoading(false)
-    }
-
-    if (event?.id) fetchTickets()
-  }, [event?.id])
+export default function TicketDialog({ event }) {
+  const { data: tickets, isLoading } = useTickets(event?.id)
 
   return (
     <Dialog>
@@ -75,18 +52,18 @@ export default function Ticket({ event }) {
         </DialogHeader>
 
         <div className="space-y-3">
-          {loading && (
+          {isLoading && (
             <p className="text-sm text-muted-foreground">Φόρτωση...</p>
           )}
 
-          {!loading && tickets.length === 0 && (
+          {!isLoading && (!tickets || tickets.length === 0) && (
             <p className="text-sm text-muted-foreground">
               Δεν υπάρχουν διαθέσιμα εισιτήρια αυτή τη στιγμή.
             </p>
           )}
 
-          {!loading &&
-            tickets.map((ticket) => {
+          {!isLoading &&
+            tickets?.map((ticket) => {
               const status = getAvailabilityStatus(ticket)
               const soldOut = status.remaining === 0
 

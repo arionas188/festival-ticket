@@ -1,4 +1,4 @@
-export default function InfoBand() {
+export default function BandInfo() {
     return (
         <div className=" border mx-auto rounded-xl max-w-7xl px-4 sm:px-6 lg:px-8">
             <h1>Η Δημιουργία και το Ξεκίνημα (1984–1986)Το συγκρότημα σχηματίστηκε στη Βέροια το 1984 από τους Στέλιο «Σαλβαδόρ» Παπαϊωάννου (φωνή, μπάσο), 

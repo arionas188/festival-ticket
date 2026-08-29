@@ -7,14 +7,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { getMapsUrl } from "../../lib/maps"
 
-function getMapsUrl(event) {
-  if (event.location_url) return event.location_url
-  const destination = event.location || event.title
-  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`
-}
-
-export default function InfoGeneral({ event }) {
+export default function EventInfoDialog({ event }) {
   return (
     <Dialog>
       <div className="flex w-full min-w-0 flex-1">
