@@ -1,18 +1,42 @@
 import { useState } from "react"
 import { HeartIcon, ShoppingCartIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import TenantSearchDialog from "./TenantSearchDialog"
 
-export default function TenantTopBar({ fanAvatarUrl, favoritesCount = 0, cartCount = 0 }) {
+export default function TenantTopBar({ fanAvatarUrl, favoritesCount = 0, cartCount = 0, onSignOut }) {
   const [searchOpen, setSearchOpen] = useState(false)
 
   return (
     <>
       <div className="flex items-center gap-2">
-        <img
-          alt="Το προφίλ σου"
-          src={fanAvatarUrl}
-          className="size-9 rounded-full object-cover ring-2 ring-white"
-        />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button">
+              <img
+                alt="Το προφίλ σου"
+                src={fanAvatarUrl}
+                className="size-9 rounded-full object-cover ring-2 ring-white"
+              />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Ο λογαριασμός μου</DropdownMenuLabel>
+              <DropdownMenuItem disabled>Προφίλ (σύντομα)</DropdownMenuItem>
+              <DropdownMenuItem disabled>Παραγγελίες μου (σύντομα)</DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onSignOut}>Αποσύνδεση</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div className="ml-auto flex items-center gap-2">
           <button

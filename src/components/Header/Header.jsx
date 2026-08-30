@@ -7,20 +7,44 @@ import BandInfo from "../BandInfo/BandInfo"
 import EventsSection from "../Events/EventsSection"
 import MerchStore from "../Merch/MerchStore"
 import TenantTopBar from "./TenantTopBar"
+import { useAuth } from "../../hooks/useAuth"
+import { useTenantFollow } from "../../queries/useTenantFollow"
+import { useEnsureFanAndFollow } from "../../queries/useFanProfile"
+import { supabase } from "../../lib/supabase"
 
 const TABS = ['Πληροφορίες', 'Εκδηλώσεις', 'Merch Store']
 
-// TODO: αύριο αντικαθίσταται με πραγματικό auth state (useAuth() ή αντίστοιχο)
-const FAKE_IS_LOGGED_IN = true
-const FAKE_FAN_AVATAR = "https://api.dicebear.com/7.x/avataaars/svg?seed=fan"
-
 export default function Header({ tenant, settings }) {
   const [activeTab, setActiveTab] = useState('Πληροφορίες')
+  const { user, isLoggedIn } = useAuth()
+
+  const { data: isFollowing, isLoading: followLoading } = useTenantFollow(user?.id, tenant?.id)
+
+  // Αν μόλις συνδέθηκε, φρόντισε να υπάρχει fan profile + follow σε αυτό το tenant
+  useEnsureFanAndFollow(isLoggedIn ? user : null, tenant?.id)
+
+  async function handleFollowClick() {
+    if (!isLoggedIn) {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.href },
+      })
+      return
+    }
+    // Αν είναι ήδη συνδεδεμένος αλλά δεν ακολουθεί ακόμα αυτό το tenant,
+    // το useEnsureFanAndFollow το κάνει ήδη αυτόματα — δεν χρειάζεται επιπλέον action εδώ.
+  }
 
   const bandName = settings?.display_name || tenant?.name
   const bandBio = settings?.bio
   const bandLogo = settings?.logo_url || bandLogoFallback
   const bandCover = settings?.cover_image_url || bandCoverFallback
+
+  const showTopBar = isLoggedIn && isFollowing
+  
+  const hasFollowedBefore = tenant?.id
+  ? localStorage.getItem(`followed_tenant_${tenant.id}`) === "true"
+  : false
 
   return (
     <div className="min-h-screen bg-white">
@@ -38,19 +62,23 @@ export default function Header({ tenant, settings }) {
             className="size-24 rounded-full ring-4 ring-white sm:size-32"
           />
 
-          {FAKE_IS_LOGGED_IN ? (
+          {showTopBar ? (
             <div className="mb-1 flex-1">
-              <TenantTopBar
-                fanAvatarUrl={FAKE_FAN_AVATAR}
-                favoritesCount={0}
-                cartCount={0}
-              />
-            </div>
+<TenantTopBar
+  fanAvatarUrl={user?.user_metadata?.avatar_url}
+  favoritesCount={0}
+  cartCount={0}
+  onSignOut={() => supabase.auth.signOut()}
+/>            </div>
           ) : (
-            <Button className="mb-1 rounded-full bg-green-600 px-2 py-3 text-sm font-semibold text-white shadow-md hover:bg-green-700">
-              <PlusIcon aria-hidden="true" className="mr-1.5 size-4" />
-              Ακολούθησε
-            </Button>
+            <Button
+              onClick={handleFollowClick}
+              disabled={followLoading}
+              className="mb-1 rounded-full bg-green-600 px-2 py-3 text-sm font-semibold text-white shadow-md hover:bg-green-700"
+            >
+<PlusIcon aria-hidden="true" className="mr-1.5 size-4" />
+  {hasFollowedBefore ? "Σύνδεση" : "Ακολούθησε"}            
+  </Button>
           )}
         </div>
 
