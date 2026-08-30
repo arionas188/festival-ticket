@@ -28,9 +28,10 @@ export function useEnsureFanAndFollow(user, tenantId) {
 
       if (!followError) {
         localStorage.setItem(`followed_tenant_${tenantId}`, "true")
+        queryClient.setQueryData(["tenant_follow", user.id, tenantId], true)
+      } else {
+        queryClient.invalidateQueries({ queryKey: ["tenant_follow", user.id, tenantId] })
       }
-
-      queryClient.invalidateQueries({ queryKey: ["tenant_follow", user.id, tenantId] })
     }
 
     ensure()
