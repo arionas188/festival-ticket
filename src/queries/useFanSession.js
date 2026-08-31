@@ -2,14 +2,9 @@ import { useQuery } from "@tanstack/react-query"
 import { supabase } from "../lib/supabase"
 
 export function useFanSession(user, tenantId) {
-  const enabled = !!user?.id && !!tenantId
-  console.log("🟢 [useFanSession] enabled:", enabled, "| user:", user?.id, "| tenant:", tenantId)
-
   return useQuery({
     queryKey: ["fan_session", user?.id, tenantId],
     queryFn: async () => {
-      console.log("🟢 [useFanSession] queryFn START")
-
       const { error: fanError } = await supabase.from("fans").upsert(
         {
           id: user.id,
@@ -19,20 +14,18 @@ export function useFanSession(user, tenantId) {
         },
         { onConflict: "id" }
       )
-      console.log("🟢 [useFanSession] fans upsert DONE, error:", fanError)
       if (fanError) throw fanError
 
       const { error: followError } = await supabase.from("tenant_follows").upsert(
         { fan_id: user.id, tenant_id: tenantId },
         { onConflict: "fan_id,tenant_id", ignoreDuplicates: true }
       )
-      console.log("🟢 [useFanSession] follows upsert DONE, error:", followError)
       if (followError) throw followError
 
       localStorage.setItem(`followed_tenant_${tenantId}`, "true")
-      console.log("🟢 [useFanSession] returning TRUE")
+
       return true
     },
-    enabled,
+    enabled: !!user?.id && !!tenantId,
   })
 }

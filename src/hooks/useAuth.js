@@ -5,15 +5,19 @@ export function useAuth() {
   const [session, setSession] = useState(undefined)
 
   useEffect(() => {
+    console.log("🔵 [useAuth] mount, calling getSession()")
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("🔵 [useAuth] getSession resolved:", session ? "SESSION OK" : "NULL")
       setSession(session)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("🔵 [useAuth] onAuthStateChange event:", event, session ? "SESSION OK" : "NULL")
+
       setSession(session)
 
-      // Καθάρισε το access_token από το URL μόλις γίνει parse
-      if (window.location.hash.includes("access_token")) {
+      if (session && window.location.hash.includes("access_token")) {
         window.history.replaceState(null, "", window.location.pathname + window.location.search)
       }
     })

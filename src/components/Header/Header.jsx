@@ -8,9 +8,8 @@ import EventsSection from "../Events/EventsSection"
 import MerchStore from "../Merch/MerchStore"
 import TenantTopBar from "./TenantTopBar"
 import { useAuth } from "../../hooks/useAuth"
-import { useTenantFollow } from "../../queries/useTenantFollow"
-import { useEnsureFanAndFollow } from "../../queries/useFanProfile"
 import { supabase } from "../../lib/supabase"
+import { useFanSession } from "../../queries/useFanSession"
 
 const TABS = ['Πληροφορίες', 'Εκδηλώσεις', 'Merch Store']
 
@@ -18,16 +17,13 @@ export default function Header({ tenant, settings }) {
   const [activeTab, setActiveTab] = useState('Πληροφορίες')
   const { user, isLoggedIn } = useAuth()
 
-  const { data: isFollowing, isLoading: followLoading } = useTenantFollow(user?.id, tenant?.id)
-
-  // Αν μόλις συνδέθηκε, φρόντισε να υπάρχει fan profile + follow σε αυτό το tenant
-  useEnsureFanAndFollow(isLoggedIn ? user : null, tenant?.id)
-
+  const { data: isFollowing, isLoading: followLoading } = useFanSession(isLoggedIn ? user : null, tenant?.id)
+  console.log("🟡 [Header] isLoggedIn:", isLoggedIn, "| isFollowing:", isFollowing, "| followLoading:", followLoading, "| tenant:", tenant?.id)
   async function handleFollowClick() {
     if (!isLoggedIn) {
       await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: window.location.href },
+        options: { redirectTo: window.location.origin + window.location.pathname },
       })
       return
     }
