@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 
@@ -8,6 +8,15 @@ const PLACEHOLDER_SIZES = ["S", "M", "L", "XL"]
 export default function ProductQuickShop({ product, onClose, onAddToCart }) {
   const [quantity, setQuantity] = useState(1)
   const [selectedSize, setSelectedSize] = useState(null)
+
+  // Επαναφορά ποσότητας/μεγέθους κάθε φορά που αλλάζει το προϊόν
+  // (το component δεν κάνει unmount/mount, οπότε το state δεν επαναφέρεται μόνο του)
+  useEffect(() => {
+    if (product) {
+      setQuantity(1)
+      setSelectedSize(null)
+    }
+  }, [product?.id])
 
   if (!product) {
     return (
@@ -50,29 +59,27 @@ export default function ProductQuickShop({ product, onClose, onAddToCart }) {
                   </fieldset>
 
                   <fieldset aria-label="Επιλογή μεγέθους" className="mt-6">
-  <div className="text-sm font-medium text-gray-900">Μέγεθος</div>
-  <div className="mt-2 grid grid-cols-4 gap-2">
-    {PLACEHOLDER_SIZES.map((size) => (
-      <button
-        key={size}
-        type="button"
-        onClick={() => setSelectedSize(size)}
-        className={`flex items-center justify-center rounded-md border p-2 text-sm font-medium ${
-          selectedSize === size
-            ? "border-gray-900 bg-gray-900 text-white"
-            : "border-gray-300 text-gray-900 hover:bg-gray-50"
-        }`}
-      >
-        {size}
-      </button>
-    ))}
-  </div>
-</fieldset>
-
+                    <div className="text-sm font-medium text-gray-900">Μέγεθος</div>
+                    <div className="mt-2 grid grid-cols-4 gap-2">
+                      {PLACEHOLDER_SIZES.map((size) => (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => setSelectedSize(size)}
+                          className={`flex items-center justify-center rounded-md border p-2 text-sm font-medium ${
+                            selectedSize === size
+                              ? "border-gray-900 bg-gray-900 text-white"
+                              : "border-gray-300 text-gray-900 hover:bg-gray-50"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
                 </>
               )}
 
-              {/* Ποσότητα */}
               <div className="mt-6">
                 <div className="text-sm font-medium text-gray-900">Ποσότητα</div>
                 <div className="mt-2 flex items-center gap-3">
@@ -94,7 +101,6 @@ export default function ProductQuickShop({ product, onClose, onAddToCart }) {
                 </div>
               </div>
 
-              {/* 3 κουμπιά, το ένα κάτω από το άλλο */}
               <div className="mt-6 flex flex-col gap-2">
                 <Button
                   type="button"
@@ -104,9 +110,6 @@ export default function ProductQuickShop({ product, onClose, onAddToCart }) {
                   }}
                 >
                   Προσθήκη στο καλάθι
-                </Button>
-                <Button type="button" variant="outline" onClick={onClose}>
-                  Συνέχεια στην αγορά
                 </Button>
                 <Button type="button" variant="ghost" disabled title="Έρχεται σύντομα">
                   Πληρωμή

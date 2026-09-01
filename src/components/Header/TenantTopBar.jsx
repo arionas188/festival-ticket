@@ -10,9 +10,18 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import TenantSearchDialog from "./TenantSearchDialog"
+import FavoritesDialog from "../Merch/FavoritesDialog"
+import CartDialog from "../Merch/CartDialog"
+import { useCart } from "../../context/CartContext"
+import { useFavorites } from "../../queries/useFavorites"
 
-export default function TenantTopBar({ fanAvatarUrl, favoritesCount = 0, cartCount = 0, onSignOut }) {
+export default function TenantTopBar({ fanAvatarUrl, onSignOut, tenantId, fanId, onQuickBuy }) {
   const [searchOpen, setSearchOpen] = useState(false)
+  const [favoritesOpen, setFavoritesOpen] = useState(false)
+  const [cartOpen, setCartOpen] = useState(false)
+  const { itemCount } = useCart()
+  const { data: favoriteIds = [] } = useFavorites(fanId)
+  const favoritesCount = favoriteIds.length
 
   return (
     <>
@@ -49,6 +58,7 @@ export default function TenantTopBar({ fanAvatarUrl, favoritesCount = 0, cartCou
 
           <button
             type="button"
+            onClick={() => setFavoritesOpen(true)}
             className="relative flex size-9 items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:bg-gray-100"
           >
             <HeartIcon className="size-5" />
@@ -61,19 +71,30 @@ export default function TenantTopBar({ fanAvatarUrl, favoritesCount = 0, cartCou
 
           <button
             type="button"
+            onClick={() => setCartOpen(true)}
             className="relative flex size-9 items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:bg-gray-100"
           >
             <ShoppingCartIcon className="size-5" />
-            {cartCount > 0 && (
+            {itemCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
-                {cartCount}
+                {itemCount}
               </span>
             )}
           </button>
         </div>
       </div>
 
-      <TenantSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+      <TenantSearchDialog open={searchOpen} onOpenChange={setSearchOpen} tenantId={tenantId} />
+
+      <FavoritesDialog
+        open={favoritesOpen}
+        onOpenChange={setFavoritesOpen}
+        fanId={fanId}
+        tenantId={tenantId}
+        onQuickBuy={onQuickBuy}
+      />
+
+      <CartDialog open={cartOpen} onOpenChange={setCartOpen} />
     </>
   )
 }

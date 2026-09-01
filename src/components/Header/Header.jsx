@@ -6,19 +6,27 @@ import bandCoverFallback from '../../assets/images/MwraStiFwtiaBand.webp'
 import BandInfo from "../BandInfo/BandInfo"
 import EventsSection from "../Events/EventsSection"
 import MerchStore from "../Merch/MerchStore"
+import ProductQuickShop from "../Merch/ProductQuickShop"
 import TenantTopBar from "./TenantTopBar"
 import { useAuth } from "../../hooks/useAuth"
 import { supabase } from "../../lib/supabase"
 import { useFanSession } from "../../queries/useFanSession"
+import { useCart } from "../../context/CartContext"
+import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 
 const TABS = ['Πληροφορίες', 'Εκδηλώσεις', 'Merch Store']
 
 export default function Header({ tenant, settings }) {
   const [activeTab, setActiveTab] = useState('Πληροφορίες')
+  const [selectedProduct, setSelectedProduct] = useState(null)
   const { user, isLoggedIn } = useAuth()
+  const { addItem } = useCart()
 
   const { data: isFollowing, isLoading: followLoading } = useFanSession(isLoggedIn ? user : null, tenant?.id)
-  console.log("🟡 [Header] isLoggedIn:", isLoggedIn, "| isFollowing:", isFollowing, "| followLoading:", followLoading, "| tenant:", tenant?.id)
+
+  const { data: favoriteIds = [] } = useFavorites(user?.id)
+  const toggleFavorite = useToggleFavorite(user?.id)
+
   async function handleFollowClick() {
     if (!isLoggedIn) {
       await supabase.auth.signInWithOAuth({
@@ -27,8 +35,13 @@ export default function Header({ tenant, settings }) {
       })
       return
     }
-    // Αν είναι ήδη συνδεδεμένος αλλά δεν ακολουθεί ακόμα αυτό το tenant,
-    // το useEnsureFanAndFollow το κάνει ήδη αυτόματα — δεν χρειάζεται επιπλέον action εδώ.
+  }
+
+  function handleAddToCart(product, quantity) {
+    addItem(product, quantity)
+    if (favoriteIds.includes(product.id)) {
+      toggleFavorite.mutate({ productId: product.id, isFavorited: true })
+    }
   }
 
   const bandName = settings?.display_name || tenant?.name
@@ -37,10 +50,10 @@ export default function Header({ tenant, settings }) {
   const bandCover = settings?.cover_image_url || bandCoverFallback
 
   const showTopBar = isLoggedIn && isFollowing
-  
+
   const hasFollowedBefore = tenant?.id
-  ? localStorage.getItem(`followed_tenant_${tenant.id}`) === "true"
-  : false
+    ? localStorage.getItem(`followed_tenant_${tenant.id}`) === "true"
+    : false
 
   return (
     <div className="min-h-screen bg-white">
@@ -60,21 +73,23 @@ export default function Header({ tenant, settings }) {
 
           {showTopBar ? (
             <div className="mb-1 flex-1">
-<TenantTopBar
-  fanAvatarUrl={user?.user_metadata?.avatar_url}
-  favoritesCount={0}
-  cartCount={0}
-  onSignOut={() => supabase.auth.signOut()}
-/>            </div>
+              <TenantTopBar
+                fanAvatarUrl={user?.user_metadata?.avatar_url}
+                onSignOut={() => supabase.auth.signOut()}
+                tenantId={tenant?.id}
+                fanId={user?.id}
+                onQuickBuy={setSelectedProduct}
+              />
+            </div>
           ) : (
             <Button
               onClick={handleFollowClick}
               disabled={followLoading}
               className="mb-1 rounded-full bg-green-600 px-2 py-3 text-sm font-semibold text-white shadow-md hover:bg-green-700"
             >
-<PlusIcon aria-hidden="true" className="mr-1.5 size-4" />
-  {hasFollowedBefore ? "Σύνδεση" : "Ακολούθησε"}            
-  </Button>
+              <PlusIcon aria-hidden="true" className="mr-1.5 size-4" />
+              {hasFollowedBefore ? "Σύνδεση" : "Ακολούθησε"}
+            </Button>
           )}
         </div>
 
@@ -113,7 +128,13 @@ export default function Header({ tenant, settings }) {
             </>
           )}
           {activeTab === 'Εκδηλώσεις' && <EventsSection tenantId={tenant?.id} />}
-          {activeTab === 'Merch Store' && <MerchStore tenantId={tenant?.id} />}
+          {activeTab === 'Merch Store' && (
+            <MerchStore
+              tenantId={tenant?.id}
+              fanId={user?.id}
+              onSelectProduct={setSelectedProduct}
+            />
+          )}
         </div>
 
         <div className="mt-8 mb-6 flex gap-3">
@@ -133,6 +154,12 @@ export default function Header({ tenant, settings }) {
           </button>
         </div>
       </div>
+
+      <ProductQuickShop
+        product={selectedProduct}
+        onClose={() => setSelectedProduct(null)}
+        onAddToCart={handleAddToCart}
+      />
     </div>
   )
 }

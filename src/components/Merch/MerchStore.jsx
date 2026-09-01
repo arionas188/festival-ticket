@@ -3,13 +3,12 @@ import { useProducts } from "../../queries/useProducts"
 import CategoryGrid from "./CategoryGrid"
 import ProductList from "./ProductList"
 import ProductFilters from "./ProductFilters"
-import ProductQuickShop from "./ProductQuickShop"
+
 const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 30 * 6
 
-export default function MerchStore({ tenantId }) {
+export default function MerchStore({ tenantId, fanId, onSelectProduct }) {
   const { data: products, isLoading, error } = useProducts(tenantId)
   const [selectedCategory, setSelectedCategory] = useState(null)
-  const [selectedProduct, setSelectedProduct] = useState(null)
   const [sortBy, setSortBy] = useState("newest")
 
   const newArrivals = useMemo(() => {
@@ -44,7 +43,6 @@ export default function MerchStore({ tenantId }) {
     return items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   }, [activeItems, sortBy])
 
-  // ΟΛΑ τα hooks έχουν ήδη κληθεί μέχρι εδώ — τώρα είναι ασφαλές να κάνουμε early return
   if (isLoading) return <p className="p-8 text-sm text-gray-500">Φόρτωση προϊόντων...</p>
   if (error) return <p className="p-8 text-sm text-red-600">Σφάλμα φόρτωσης προϊόντων.</p>
 
@@ -66,18 +64,9 @@ export default function MerchStore({ tenantId }) {
 
           <ProductFilters sortBy={sortBy} onSortChange={setSortBy} />
 
-          <ProductList products={sortedItems} onQuickBuy={setSelectedProduct} />
-
-</div>
+          <ProductList products={sortedItems} onQuickBuy={onSelectProduct} fanId={fanId} />
+        </div>
       )}
-
-<ProductQuickShop
-  product={selectedProduct}
-  onClose={() => setSelectedProduct(null)}
-  onAddToCart={(product, quantity) => {
-    console.log("Add to cart:", product, quantity) // TODO: σύνδεση με ShoppingCart Context
-  }}
-/>    
-</div>
+    </div>
   )
 }
