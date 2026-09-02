@@ -1,7 +1,7 @@
 import { useEvents } from "../../queries/useEvents"
 import EventsList from "./EventsList"
 
-export default function EventsSection({ tenantId }) {
+export default function EventsSection({ tenantId, isLoggedIn, onRequireAuth }) {
   const { data: events, isLoading, error } = useEvents(tenantId)
 
   if (isLoading) return <p>Φόρτωση events...</p>
@@ -11,5 +11,5 @@ export default function EventsSection({ tenantId }) {
     return <p>Δεν υπάρχουν events αυτή τη στιγμή.</p>
   }
 
-  return <EventsList events={events} />
+  return <EventsList events={events} isLoggedIn={isLoggedIn} onRequireAuth={onRequireAuth} />
 }

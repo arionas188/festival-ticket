@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { TicketIcon } from "@heroicons/react/20/solid"
 import { Button } from "@/components/ui/button"
 import {
@@ -8,7 +9,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { useTickets } from "../../queries/useTickets"
 
@@ -28,21 +28,29 @@ function getAvailabilityStatus(ticket) {
   return { label: `${remaining} διαθέσιμα`, color: "text-green-600", remaining }
 }
 
-export default function TicketDialog({ event }) {
+export default function TicketDialog({ event, isLoggedIn, onRequireAuth }) {
+  const [open, setOpen] = useState(false)
   const { data: tickets, isLoading } = useTickets(event?.id)
 
+  function handleTriggerClick() {
+    if (!isLoggedIn) {
+      onRequireAuth()
+      return
+    }
+    setOpen(true)
+  }
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <div className="flex w-full min-w-0 flex-1">
-        <DialogTrigger asChild>
-          <button
-            type="button"
-            className="relative -mr-px inline-flex w-full items-center justify-center gap-x-3 rounded-bl-lg border border-transparent py-4 text-sm font-semibold text-gray-900"
-          >
-            <TicketIcon aria-hidden="true" className="size-5 text-gray-400" />
-            Ticket
-          </button>
-        </DialogTrigger>
+        <button
+          type="button"
+          onClick={handleTriggerClick}
+          className="relative -mr-px inline-flex w-full items-center justify-center gap-x-3 rounded-bl-lg border border-transparent py-4 text-sm font-semibold text-gray-900"
+        >
+          <TicketIcon aria-hidden="true" className="size-5 text-gray-400" />
+          Ticket
+        </button>
       </div>
 
       <DialogContent className="sm:max-w-sm">

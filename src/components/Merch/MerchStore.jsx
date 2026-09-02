@@ -6,7 +6,7 @@ import ProductFilters from "./ProductFilters"
 
 const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 30 * 6
 
-export default function MerchStore({ tenantId, fanId, onSelectProduct }) {
+export default function MerchStore({ tenantId, fanId, onSelectProduct, isLoggedIn, onRequireAuth }) {
   const { data: products, isLoading, error } = useProducts(tenantId)
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [sortBy, setSortBy] = useState("newest")
@@ -64,7 +64,13 @@ export default function MerchStore({ tenantId, fanId, onSelectProduct }) {
 
           <ProductFilters sortBy={sortBy} onSortChange={setSortBy} />
 
-          <ProductList products={sortedItems} onQuickBuy={onSelectProduct} fanId={fanId} />
+          <ProductList
+            products={sortedItems}
+            onQuickBuy={onSelectProduct}
+            fanId={fanId}
+            isLoggedIn={isLoggedIn}
+            onRequireAuth={onRequireAuth}
+          />
         </div>
       )}
     </div>

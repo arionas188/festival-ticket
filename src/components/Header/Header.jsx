@@ -8,6 +8,7 @@ import EventsSection from "../Events/EventsSection"
 import MerchStore from "../Merch/MerchStore"
 import ProductQuickShop from "../Merch/ProductQuickShop"
 import TenantTopBar from "./TenantTopBar"
+import AuthGateDialog from "./AuthGateDialog"
 import { useAuth } from "../../hooks/useAuth"
 import { supabase } from "../../lib/supabase"
 import { useFanSession } from "../../queries/useFanSession"
@@ -19,6 +20,7 @@ const TABS = ['Πληροφορίες', 'Εκδηλώσεις', 'Merch Store']
 export default function Header({ tenant, settings }) {
   const [activeTab, setActiveTab] = useState('Πληροφορίες')
   const [selectedProduct, setSelectedProduct] = useState(null)
+  const [authGateOpen, setAuthGateOpen] = useState(false)
   const { user, isLoggedIn } = useAuth()
   const { addItem } = useCart()
 
@@ -27,14 +29,16 @@ export default function Header({ tenant, settings }) {
   const { data: favoriteIds = [] } = useFavorites(user?.id)
   const toggleFavorite = useToggleFavorite(user?.id)
 
-  async function handleFollowClick() {
+  function handleFollowClick() {
     if (!isLoggedIn) {
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.origin + window.location.pathname },
-      })
+      setAuthGateOpen(true)
       return
     }
+  }
+
+  // Κοινό callback: κάθε σημείο που χρειάζεται login το καλεί, αντί να διαχειρίζεται δικό του modal
+  function requireAuth() {
+    setAuthGateOpen(true)
   }
 
   function handleAddToCart(product, quantity) {
@@ -42,6 +46,14 @@ export default function Header({ tenant, settings }) {
     if (favoriteIds.includes(product.id)) {
       toggleFavorite.mutate({ productId: product.id, isFavorited: true })
     }
+  }
+
+  function handleSelectProduct(product) {
+    if (!isLoggedIn) {
+      requireAuth()
+      return
+    }
+    setSelectedProduct(product)
   }
 
   const bandName = settings?.display_name || tenant?.name
@@ -78,7 +90,7 @@ export default function Header({ tenant, settings }) {
                 onSignOut={() => supabase.auth.signOut()}
                 tenantId={tenant?.id}
                 fanId={user?.id}
-                onQuickBuy={setSelectedProduct}
+                onQuickBuy={handleSelectProduct}
               />
             </div>
           ) : (
@@ -127,12 +139,20 @@ export default function Header({ tenant, settings }) {
               <BandInfo />
             </>
           )}
-          {activeTab === 'Εκδηλώσεις' && <EventsSection tenantId={tenant?.id} />}
+          {activeTab === 'Εκδηλώσεις' && (
+            <EventsSection
+              tenantId={tenant?.id}
+              isLoggedIn={isLoggedIn}
+              onRequireAuth={requireAuth}
+            />
+          )}
           {activeTab === 'Merch Store' && (
             <MerchStore
               tenantId={tenant?.id}
               fanId={user?.id}
-              onSelectProduct={setSelectedProduct}
+              onSelectProduct={handleSelectProduct}
+              isLoggedIn={isLoggedIn}
+              onRequireAuth={requireAuth}
             />
           )}
         </div>
@@ -159,6 +179,14 @@ export default function Header({ tenant, settings }) {
         product={selectedProduct}
         onClose={() => setSelectedProduct(null)}
         onAddToCart={handleAddToCart}
+      />
+
+      <AuthGateDialog
+        open={authGateOpen}
+        onOpenChange={setAuthGateOpen}
+        tenantName={bandName}
+        tenantLogo={bandLogo}
+        tenantCover={bandCover}
       />
     </div>
   )

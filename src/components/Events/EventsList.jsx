@@ -26,7 +26,7 @@ function formatDateBadge(dateString) {
   return d.toLocaleDateString('el-GR', { day: 'numeric', month: 'numeric' })
 }
 
-export default function EventsList({ events }) {
+export default function EventsList({ events, isLoggedIn, onRequireAuth }) {
   return (
     <ul role="list" className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {events.map((event) => {
@@ -73,9 +73,9 @@ export default function EventsList({ events }) {
 
             <div>
               <div className="-mt-px flex divide-x divide-gray-200">
-              <div className="flex min-w-0 flex-1">
-                <TicketDialog event={event} />
-              </div>
+                <div className="flex min-w-0 flex-1">
+                  <TicketDialog event={event} isLoggedIn={isLoggedIn} onRequireAuth={onRequireAuth} />
+                </div>
                 <div className="-ml-px flex min-w-0 flex-1">
                   <a
                     href={getMapsUrl(event)}
@@ -89,8 +89,8 @@ export default function EventsList({ events }) {
                 </div>
                 <div className="-ml-px flex min-w-0 flex-1">
                   <EventInfoDialog event={event} />
-                </div>              
-            </div>
+                </div>
+              </div>
             </div>
           </li>
         )
