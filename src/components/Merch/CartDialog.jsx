@@ -7,10 +7,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { useCart } from "../../context/CartContext"
+import { useCart } from "../../queries/useCart"
 
-export default function CartDialog({ open, onOpenChange }) {
-  const { items, removeItem, updateQuantity, subtotal } = useCart()
+export default function CartDialog({ open, onOpenChange, fanId }) {
+  const { items, removeItem, updateQuantity, subtotal } = useCart(fanId)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -45,7 +45,7 @@ export default function CartDialog({ open, onOpenChange }) {
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => updateQuantity(product.id, quantity - 1)}
+                    onClick={() => updateQuantity(product.id, -1)}
                     className="flex size-7 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     −
@@ -55,7 +55,7 @@ export default function CartDialog({ open, onOpenChange }) {
                   </span>
                   <button
                     type="button"
-                    onClick={() => updateQuantity(product.id, quantity + 1)}
+                    onClick={() => updateQuantity(product.id, 1)}
                     className="flex size-7 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     +

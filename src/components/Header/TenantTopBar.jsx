@@ -12,14 +12,14 @@ import {
 import TenantSearchDialog from "./TenantSearchDialog"
 import FavoritesDialog from "../Merch/FavoritesDialog"
 import CartDialog from "../Merch/CartDialog"
-import { useCart } from "../../context/CartContext"
+import { useCart } from "../../queries/useCart"
 import { useFavorites } from "../../queries/useFavorites"
 
 export default function TenantTopBar({ fanAvatarUrl, onSignOut, tenantId, fanId, onQuickBuy }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [favoritesOpen, setFavoritesOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
-  const { itemCount } = useCart()
+  const { itemCount } = useCart(fanId)
   const { data: favoriteIds = [] } = useFavorites(fanId)
   const favoritesCount = favoriteIds.length
 
@@ -94,7 +94,7 @@ export default function TenantTopBar({ fanAvatarUrl, onSignOut, tenantId, fanId,
         onQuickBuy={onQuickBuy}
       />
 
-      <CartDialog open={cartOpen} onOpenChange={setCartOpen} />
-    </>
+<CartDialog open={cartOpen} onOpenChange={setCartOpen} fanId={fanId} /> 
+   </>
   )
 }

@@ -12,7 +12,7 @@ import AuthGateDialog from "./AuthGateDialog"
 import { useAuth } from "../../hooks/useAuth"
 import { supabase } from "../../lib/supabase"
 import { useFanSession } from "../../queries/useFanSession"
-import { useCart } from "../../context/CartContext"
+import { useCart } from "../../queries/useCart"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 
 const TABS = ['Πληροφορίες', 'Εκδηλώσεις', 'Merch Store']
@@ -22,8 +22,7 @@ export default function Header({ tenant, settings }) {
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [authGateOpen, setAuthGateOpen] = useState(false)
   const { user, isLoggedIn } = useAuth()
-  const { addItem } = useCart()
-
+  const { addItem } = useCart(user?.id)
   const { data: isFollowing, isLoading: followLoading } = useFanSession(isLoggedIn ? user : null, tenant?.id)
 
   const { data: favoriteIds = [] } = useFavorites(user?.id)
