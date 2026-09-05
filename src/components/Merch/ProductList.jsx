@@ -1,12 +1,13 @@
 import { useState } from "react"
 import { HeartIcon, ShoppingCartIcon } from "@heroicons/react/24/outline"
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid"
+import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 import ProductGallery from "./ProductGallery"
 
-export default function ProductList({ products, onQuickBuy, fanId, isLoggedIn, onRequireAuth }) {
+export default function ProductList({ products, fanId, isLoggedIn, onRequireAuth }) {
   const { data: favoriteIds = [] } = useFavorites(fanId)
   const toggleFavorite = useToggleFavorite(fanId)
   const [galleryProduct, setGalleryProduct] = useState(null)
@@ -67,14 +68,13 @@ export default function ProductList({ products, onQuickBuy, fanId, isLoggedIn, o
                     </p>
                   </div>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="mt-3 w-full"
-                    onClick={() => onQuickBuy(product)}
-                  >
-                    Γρήγορη αγορά
-                    <ShoppingCartIcon className="ml-2 size-4" />
+                  {/* asChild + Link: πραγματικό <a>, ίδιο styling με το Button
+                      (ίδιο Radix Slot pattern με DialogTrigger/DialogClose asChild) */}
+                  <Button asChild variant="outline" className="mt-3 w-full">
+                    <Link to={`product/${product.id}`}>
+                      Γρήγορη αγορά
+                      <ShoppingCartIcon className="ml-2 size-4" />
+                    </Link>
                   </Button>
                 </CardContent>
               </Card>

@@ -1,30 +1,23 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 
 const PLACEHOLDER_COLORS = [{ id: "black", name: "Μαύρο", classes: "bg-gray-900" }]
 const PLACEHOLDER_SIZES = ["S", "M", "L", "XL"]
 
-export default function ProductQuickShop({ product, onClose, onAddToCart }) {
+export default function ProductQuickShop({
+  product,
+  onClose,
+  onAddToCart,
+  isLoggedIn,
+  onRequireAuth,
+}) {
   const [quantity, setQuantity] = useState(1)
   const [selectedSize, setSelectedSize] = useState(null)
 
-  // Επαναφορά ποσότητας/μεγέθους κάθε φορά που αλλάζει το προϊόν
-  // (το component δεν κάνει unmount/mount, οπότε το state δεν επαναφέρεται μόνο του)
-  useEffect(() => {
-    if (product) {
-      setQuantity(1)
-      setSelectedSize(null)
-    }
-  }, [product?.id])
-
-  if (!product) {
-    return (
-      <Dialog open={false} onOpenChange={() => {}}>
-        <DialogContent />
-      </Dialog>
-    )
-  }
+  // Η επαναφορά ποσότητας/μεγέθους γίνεται πλέον με remount: ο caller δίνει
+  // key={product.id}, οπότε το state ξεκινά καθαρό σε κάθε προϊόν.
+  if (!product) return null
 
   return (
     <Dialog open={!!product} onOpenChange={(open) => !open && onClose()}>
@@ -105,6 +98,14 @@ export default function ProductQuickShop({ product, onClose, onAddToCart }) {
                 <Button
                   type="button"
                   onClick={() => {
+                    // Το URL του προϊόντος είναι δημόσιο, άρα εδώ φτάνει και
+                    // αποσυνδεδεμένος επισκέπτης από κοινοποιημένο link. Το modal
+                    // μένει ανοιχτό: το redirectTo του OAuth τον επιστρέφει σε αυτό
+                    // ακριβώς το URL μετά τη σύνδεση.
+                    if (!isLoggedIn) {
+                      onRequireAuth()
+                      return
+                    }
                     onAddToCart(product, quantity)
                     onClose()
                   }}

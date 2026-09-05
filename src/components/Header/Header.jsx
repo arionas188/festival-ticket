@@ -1,12 +1,9 @@
 import { EnvelopeIcon, PhoneIcon, PlusIcon } from '@heroicons/react/20/solid'
 import { useState } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from "@/components/ui/button"
 import bandLogoFallback from '../../assets/images/MwraStiFwtia.png'
 import bandCoverFallback from '../../assets/images/MwraStiFwtiaBand.webp'
-import BandInfo from "../BandInfo/BandInfo"
-import EventsSection from "../Events/EventsSection"
-import MerchStore from "../Merch/MerchStore"
-import ProductQuickShop from "../Merch/ProductQuickShop"
 import TenantTopBar from "./TenantTopBar"
 import AuthGateDialog from "./AuthGateDialog"
 import { useAuth } from "../../hooks/useAuth"
@@ -18,8 +15,18 @@ import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 const TABS = ['Πληροφορίες', 'Εκδηλώσεις', 'Merch Store']
 
 export default function Header({ tenant, settings }) {
-  const [activeTab, setActiveTab] = useState('Πληροφορίες')
-  const [selectedProduct, setSelectedProduct] = useState(null)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Και τα τρία tabs είναι πλέον routes (Merch, Events, και το index '/' για
+  // Πληροφορίες) — το activeTab προκύπτει αποκλειστικά από το pathname, χωρίς
+  // ξεχωριστό React state.
+  const activeTab = location.pathname.startsWith('/merch')
+    ? 'Merch Store'
+    : location.pathname.startsWith('/events')
+      ? 'Εκδηλώσεις'
+      : 'Πληροφορίες'
+
   const [authGateOpen, setAuthGateOpen] = useState(false)
   const { user, isLoggedIn } = useAuth()
   const { addItem } = useCart(user?.id)
@@ -47,12 +54,21 @@ export default function Header({ tenant, settings }) {
     }
   }
 
-  function handleSelectProduct(product) {
-    if (!isLoggedIn) {
-      requireAuth()
+  function handleTabClick(tab) {
+    if (tab === 'Merch Store') {
+      navigate('/merch')
       return
     }
-    setSelectedProduct(product)
+    if (tab === 'Εκδηλώσεις') {
+      navigate('/events')
+      return
+    }
+    navigate('/')
+  }
+
+  // Καλείται από το TenantTopBar (καλάθι/αγαπημένα), εκτός λίστας κατηγορίας
+  function handleSelectProduct(product) {
+    navigate(`/merch/product/${product.id}`)
   }
 
   const bandName = settings?.display_name || tenant?.name
@@ -113,7 +129,7 @@ export default function Header({ tenant, settings }) {
           {TABS.map((tab) => (
             <Button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => handleTabClick(tab)}
               aria-pressed={activeTab === tab}
               className={
                 activeTab === tab
@@ -127,33 +143,18 @@ export default function Header({ tenant, settings }) {
         </div>
 
         <div className="mt-6">
-          {activeTab === 'Πληροφορίες' && (
-            <>
-              <h2 className="mb-2 text-sm font-medium text-gray-500">Πληροφορίες</h2>
-              {bandBio && (
-                <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">
-                  {bandBio}
-                </p>
-              )}
-              <BandInfo />
-            </>
-          )}
-          {activeTab === 'Εκδηλώσεις' && (
-            <EventsSection
-              tenantId={tenant?.id}
-              isLoggedIn={isLoggedIn}
-              onRequireAuth={requireAuth}
-            />
-          )}
-          {activeTab === 'Merch Store' && (
-            <MerchStore
-              tenantId={tenant?.id}
-              fanId={user?.id}
-              onSelectProduct={handleSelectProduct}
-              isLoggedIn={isLoggedIn}
-              onRequireAuth={requireAuth}
-            />
-          )}
+          {/* Ένα μόνο Outlet: το router αποφασίζει ποιο route-component ταιριάζει
+              (InfoRoute / EventsRoute / MerchCategoriesRoute κ.λπ.), όχι το tab state. */}
+          <Outlet
+            context={{
+              tenantId: tenant?.id,
+              fanId: user?.id,
+              isLoggedIn,
+              onRequireAuth: requireAuth,
+              onAddToCart: handleAddToCart,
+              bandBio,
+            }}
+          />
         </div>
 
         <div className="mt-8 mb-6 flex gap-3">
@@ -173,12 +174,6 @@ export default function Header({ tenant, settings }) {
           </button>
         </div>
       </div>
-
-      <ProductQuickShop
-        product={selectedProduct}
-        onClose={() => setSelectedProduct(null)}
-        onAddToCart={handleAddToCart}
-      />
 
       <AuthGateDialog
         open={authGateOpen}

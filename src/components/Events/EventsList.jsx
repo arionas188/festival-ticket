@@ -1,5 +1,5 @@
-import { MapPinIcon } from '@heroicons/react/20/solid'
-import TicketDialog from './TicketDialog'
+import { MapPinIcon, TicketIcon } from '@heroicons/react/20/solid'
+import { Link } from 'react-router-dom'
 import EventInfoDialog from './EventInfoDialog'
 import { getMapsUrl } from '../../lib/maps'
 
@@ -26,7 +26,11 @@ function formatDateBadge(dateString) {
   return d.toLocaleDateString('el-GR', { day: 'numeric', month: 'numeric' })
 }
 
-export default function EventsList({ events, isLoggedIn, onRequireAuth }) {
+// Το Ticket button είναι πραγματικό <Link> σε child route (event/:eventId) αντί
+// να ανοίγει τοπικό dialog state, ώστε το event modal να έχει δικό του μοιράσιμο
+// URL (ίδιο pattern με το ProductQuickShop στο Merch) — και right-click/"open in
+// new tab" να δουλεύει, όπως και στο CategoryGrid/ProductList.
+export default function EventsList({ events }) {
   return (
     <ul role="list" className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {events.map((event) => {
@@ -74,7 +78,13 @@ export default function EventsList({ events, isLoggedIn, onRequireAuth }) {
             <div>
               <div className="-mt-px flex divide-x divide-gray-200">
                 <div className="flex min-w-0 flex-1">
-                  <TicketDialog event={event} isLoggedIn={isLoggedIn} onRequireAuth={onRequireAuth} />
+                  <Link
+                    to={`event/${event.id}`}
+                    className="relative -mr-px inline-flex w-full items-center justify-center gap-x-3 rounded-bl-lg border border-transparent py-4 text-sm font-semibold text-gray-900"
+                  >
+                    <TicketIcon aria-hidden="true" className="size-5 text-gray-400" />
+                    Ticket
+                  </Link>
                 </div>
                 <div className="-ml-px flex min-w-0 flex-1">
                   <a

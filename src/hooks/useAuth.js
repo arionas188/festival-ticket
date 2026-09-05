@@ -5,16 +5,11 @@ export function useAuth() {
   const [session, setSession] = useState(undefined)
 
   useEffect(() => {
-    console.log("🔵 [useAuth] mount, calling getSession()")
-
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("🔵 [useAuth] getSession resolved:", session ? "SESSION OK" : "NULL")
       setSession(session)
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("🔵 [useAuth] onAuthStateChange event:", event, session ? "SESSION OK" : "NULL")
-
       setSession(session)
 
       if (session && window.location.hash.includes("access_token")) {
@@ -22,7 +17,21 @@ export function useAuth() {
       }
     })
 
-    return () => listener.subscription.unsubscribe()
+    // Bfcache fix: όταν ο browser επαναφέρει παγωμένο στιγμιότυπο (π.χ. με back/forward),
+    // ξανάλεγξε το πραγματικό, τρέχον session αντί να εμπιστευτείς το παγωμένο React state.
+    function handlePageShow(event) {
+      if (event.persisted) {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          setSession(session)
+        })
+      }
+    }
+    window.addEventListener("pageshow", handlePageShow)
+
+    return () => {
+      listener.subscription.unsubscribe()
+      window.removeEventListener("pageshow", handlePageShow)
+    }
   }, [])
 
   return {

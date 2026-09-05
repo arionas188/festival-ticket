@@ -1,4 +1,8 @@
-export default function CategoryGrid({ categories, onSelect }) {
+import { Link } from "react-router-dom"
+
+// Πραγματικά <Link> αντί για button+onClick: right-click/"open in new tab"
+// δουλεύει, και το href είναι ορατό/crawlable.
+export default function CategoryGrid({ categories }) {
   const newArrivals = categories.find((c) => c.key === "new")
   const rest = categories.filter((c) => c.key !== "new")
 
@@ -9,9 +13,8 @@ export default function CategoryGrid({ categories, onSelect }) {
       <div className="mt-6 flex flex-col gap-6 lg:gap-8">
         {/* New Arrivals — κοντό σε mobile, πλατύ banner από sm και πάνω */}
         {newArrivals && (
-          <button
-            type="button"
-            onClick={() => onSelect(newArrivals.key)}
+          <Link
+            to={`/merch/category/${newArrivals.key}`}
             className="group relative aspect-video w-full overflow-hidden rounded-lg text-left sm:aspect-4/1"
           >
             {newArrivals.items[0]?.image_urls?.[0] && (
@@ -28,16 +31,15 @@ export default function CategoryGrid({ categories, onSelect }) {
                 <p className="mt-1 text-sm text-white">Δες περισσότερα</p>
               </div>
             </div>
-          </button>
+          </Link>
         )}
 
         {/* Οι υπόλοιπες κατηγορίες — κοντές σε mobile, μεγαλύτερες/τετράγωνες από sm και πάνω */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 lg:gap-8">
           {rest.map((cat) => (
-            <button
+            <Link
               key={cat.key}
-              type="button"
-              onClick={() => onSelect(cat.key)}
+              to={`/merch/category/${cat.key}`}
               className="group relative aspect-video w-full overflow-hidden rounded-lg text-left sm:aspect-square"
             >
               {cat.items[0]?.image_urls?.[0] && (
@@ -54,7 +56,7 @@ export default function CategoryGrid({ categories, onSelect }) {
                   <p className="mt-1 text-sm text-white">Δες περισσότερα</p>
                 </div>
               </div>
-            </button>
+            </Link>
           ))}
         </div>
       </div>

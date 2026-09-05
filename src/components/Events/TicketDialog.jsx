@@ -1,5 +1,3 @@
-import { useState } from "react"
-import { TicketIcon } from "@heroicons/react/20/solid"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -28,31 +26,24 @@ function getAvailabilityStatus(ticket) {
   return { label: `${remaining} διαθέσιμα`, color: "text-green-600", remaining }
 }
 
-export default function TicketDialog({ event, isLoggedIn, onRequireAuth }) {
-  const [open, setOpen] = useState(false)
+// Controlled dialog (open/onOpenChange), όπως το ProductQuickShop στο Merch: το
+// άνοιγμα είναι δημόσιο URL route (/events/event/:eventId), το auth guard
+// μπαίνει μόνο στην ενέργεια κράτησης, όχι στο view.
+export default function TicketDialog({ event, open, onOpenChange, isLoggedIn, onRequireAuth }) {
   const { data: tickets, isLoading } = useTickets(event?.id)
 
-  function handleTriggerClick() {
+  if (!event) return null
+
+  function handleSelectTicket() {
     if (!isLoggedIn) {
       onRequireAuth()
       return
     }
-    setOpen(true)
+    // TODO: κράτηση εισιτηρίου — μελλοντικό task (Checkout/reservation flow)
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <div className="flex w-full min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={handleTriggerClick}
-          className="relative -mr-px inline-flex w-full items-center justify-center gap-x-3 rounded-bl-lg border border-transparent py-4 text-sm font-semibold text-gray-900"
-        >
-          <TicketIcon aria-hidden="true" className="size-5 text-gray-400" />
-          Ticket
-        </button>
-      </div>
-
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{event?.title}</DialogTitle>
@@ -91,7 +82,7 @@ export default function TicketDialog({ event, isLoggedIn, onRequireAuth }) {
                       {status.label}
                     </p>
                   </div>
-                  <Button type="button" size="sm" disabled={soldOut}>
+                  <Button type="button" size="sm" disabled={soldOut} onClick={handleSelectTicket}>
                     {soldOut ? "Sold Out" : "Επιλογή"}
                   </Button>
                 </div>
