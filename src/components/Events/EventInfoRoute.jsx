@@ -1,18 +1,21 @@
 import { Navigate, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom"
-import TicketDialog from "./TicketDialog"
+import EventInfoDialog from "./EventInfoDialog"
 import { useEvents } from "../../queries/useEvents"
 import { isUuid } from "../../lib/isUuid"
 
-export default function EventModalRoute() {
+// Ίδιο pattern με το EventModalRoute (Ticket). Το ".." εδώ πάει σωστά στο
+// /events παρόλο που το path string ("event/:eventId/info") έχει ένα
+// επιπλέον "/" — το React Router μετράει βάθος route-tree (και τα δύο,
+// EventModalRoute + EventInfoRoute, είναι sibling children του "events"
+// route), όχι slashes στο URL string. (Bug που είχε μπει με "../..": πήγαινε
+// στη ρίζα "/" αντί για "/events" — διορθώθηκε.)
+export default function EventInfoRoute() {
   const context = useOutletContext()
   const { eventId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   const { data: events, isLoading } = useEvents(context.tenantId)
 
-  // "default" σημαίνει ότι το event είναι η πρώτη σελίδα του ιστορικού, δηλαδή
-  // ο χρήστης ήρθε από κοινοποιημένο link. Τότε δεν υπάρχει πίσω μέσα στο site,
-  // οπότε αντικαθιστούμε την εγγραφή αντί να γυρίσουμε πίσω.
   const cameFromSharedLink = location.key === "default"
 
   function handleClose() {
@@ -30,17 +33,15 @@ export default function EventModalRoute() {
     isUuid(eventId) ? e.id === eventId : e.slug === eventId
   )
 
-  // Σπασμένο/παλιό link (π.χ. event που αφαιρέθηκε): γύρνα στη λίστα από πάνω
+  // Σπασμένο/παλιό link: γύρνα στη λίστα events.
   if (!event) return <Navigate to=".." replace />
 
   return (
-    <TicketDialog
+    <EventInfoDialog
       key={event.id}
       event={event}
       open={true}
       onOpenChange={(open) => !open && handleClose()}
-      isLoggedIn={context.isLoggedIn}
-      onRequireAuth={context.onRequireAuth}
     />
   )
 }

@@ -1,6 +1,7 @@
 import { Navigate, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom"
 import ProductQuickShop from "./ProductQuickShop"
 import { useProducts } from "../../queries/useProducts"
+import { isUuid } from "../../lib/isUuid"
 
 export default function ProductModalRoute() {
   const context = useOutletContext()
@@ -24,7 +25,10 @@ export default function ProductModalRoute() {
 
   if (isLoading) return null
 
-  const product = products?.find((p) => p.id === productId)
+  // Δέχεται είτε UUID (παλιά, ήδη κοινοποιημένα links) είτε slug (νέα links).
+  const product = products?.find((p) =>
+    isUuid(productId) ? p.id === productId : p.slug === productId
+  )
 
   // Σπασμένο/παλιό link (π.χ. προϊόν που αποσύρθηκε): γύρνα στη λίστα από πάνω
   if (!product) return <Navigate to=".." replace />

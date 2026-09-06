@@ -63,7 +63,7 @@ export default function Header({ tenant, settings }) {
       navigate('/events')
       return
     }
-    navigate('/')
+    navigate('/about')
   }
 
   // Καλείται από το TenantTopBar (καλάθι/αγαπημένα), εκτός λίστας κατηγορίας

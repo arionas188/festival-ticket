@@ -192,9 +192,92 @@
 
 **Μάθημα για του λοιπού (σημειώνεται ρητά εδώ):** όταν μια αλλαγή έχει σημαντική επίπτωση αλλού (εδώ: marketing/shareable-link value), το trade-off πρέπει να ειπωθεί ΠΡΙΝ την υλοποίηση, όχι μετά — ίδιο πνεύμα με τον Κανόνα #2/#5 στην κορυφή αυτού του εγγράφου.
 
+## Slug migration — ολοκληρώθηκε (κώδικας), εκκρεμεί το SQL να τρέξει ο χρήστης
+
+### Αποφάσεις (συζητήθηκαν ΠΡΙΝ την υλοποίηση, με τον χρήστη)
+- **Μεταγραφή Ελληνικά → Λατινικά** για το slug (π.χ. "Καλοκαιρινό Φεστιβάλ" → `kalokairino-festival`), όχι raw ελληνικοί χαρακτήρες στο URL. Επιλογή του χρήστη.
+- **Backward compatibility, ρητό αίτημα του χρήστη** ("θέλω να τελειώσω με αυτό και να μην το ξαναπιάσω"): το route δέχεται είτε UUID (παλιά links, ήδη δοκιμασμένα σήμερα σε browser) είτε slug (νέα links) — dual lookup στο ίδιο route param, όχι ξεχωριστό legacy route.
+- **Δημιουργία slug σε επίπεδο DB (Postgres trigger)**, όχι σε επίπεδο εφαρμογής: δεν υπάρχει ακόμα admin dashboard, τα rows μπαίνουν χειροκίνητα μέσω Supabase SQL editor — το trigger δουλεύει ανεξάρτητα από το πώς μπαίνει μια εγγραφή, τώρα ή στο μελλοντικό dashboard.
+- **Uniqueness ανά tenant** (`UNIQUE(tenant_id, slug)`), όχι global — δύο διαφορετικά tenants μπορεί να έχουν προϊόν/event με ίδιο όνομα.
+- Slug **δεν αλλάζει ποτέ μόνο του** όταν αλλάζει το name/title (μόνο explicit `UPDATE ... SET slug = NULL`) — προστατεύει τα ήδη κοινοποιημένα slug links.
+
+### Υλοποίηση
+- **Νέο SQL migration file**: `supabase/migrations/20260906075738_add_product_event_slugs.sql`. Περιέχει: `slugify(text)` function (Ελληνικά→Λατινικά, NFC normalize πρώτα για precomposed/decomposed input, πολυχαρακτηρικά θ/χ/ψ πριν το `translate()`), trigger functions `set_product_slug`/`set_event_slug` (`SECURITY DEFINER`, collision suffix `-2`/`-3`... ανά tenant), deterministic set-based backfill για τα υπάρχοντα rows, `NOT NULL` + `UNIQUE(tenant_id, slug)` + shape `CHECK` constraint σε κάθε table.
+  - **⚠️ ΔΕΝ το έτρεξα εγώ** — δεν έχω δίκτυο/credentials από το sandbox προς το production Supabase project (ίδιος περιορισμός με το `git push` νωρίτερα). **Ο χρήστης πρέπει να το κάνει paste στο Supabase SQL editor μία φορά.** Sanity-check queries περιλαμβάνονται ως σχόλιο στο τέλος του αρχείου.
+- **`src/lib/isUuid.js`** (νέο) — μικρό util, regex UUID detection, καμία νέα βιβλιοθήκη.
+- **`src/components/Merch/ProductModalRoute.jsx`** / **`src/components/Events/EventModalRoute.jsx`** — το `.find()` γίνεται πλέον `isUuid(param) ? p.id === param : p.slug === param`. Τίποτα άλλο δεν άλλαξε (το `<Navigate to=".." replace />` fallback και το `location.key === "default"` detection δουλεύουν ήδη ανεξάρτητα).
+- **`src/components/Merch/ProductList.jsx`** / **`src/components/Events/EventsList.jsx`** — τα `<Link>` δείχνουν πλέον σε `product.slug`/`event.slug` αντί για `.id`.
+- **`src/components/Merch/CategoryGrid.jsx`** — καμία αλλαγή (επιβεβαιωμένο: δείχνει μόνο σε category keys, όχι μεμονωμένα προϊόντα).
+- Route params `:productId`/`:eventId` στο `main.jsx` **δεν μετονομάστηκαν** (καθαρά cosmetic, ελαχιστοποίηση diff — ρητή επιλογή, όχι παράλειψη).
+- Μηδέν νέο React Query hook/cache key — το `slug` έρχεται αυτόματα μέσω του ήδη υπάρχοντος `.select('*')`.
+
+### Verification
+- **Lint:** μηδέν νέα errors/warnings (τα 13 προϋπάρχοντα errors σε `src/components/ui/*` επιβεβαιώθηκαν άσχετα, ίδιος αριθμός πριν/μετά μέσω `git stash`).
+- **Build:** περνάει.
+- **Ο χρήστης έτρεξε το migration στο Supabase SQL editor — επιβεβαιώθηκε:** 0 rows με κενό/NULL slug σε products/events.
+
+### 🐛 Bug εντοπίστηκε στην πράξη μετά το πρώτο run: λάθος μεταγραφή Β/β
+Το `translate()` μέσα στο `slugify()` χαρτογραφούσε το ελληνικό **Β/β (βήτα) σε "b"** αντί για το σωστό **"v"** (στα νέα ελληνικά το βήτα προφέρεται "v" — π.χ. Βασίλης → Vasilis). Εντοπίστηκε από τον χρήστη στο πραγματικό αποτέλεσμα: το προϊόν "Villagers - Live at Gazi (**Βινύλιο**)" έβγαλε slug `villagers-live-at-gazi-binylio` αντί για το σωστό `...-vinylio`. Όλα τα υπόλοιπα γράμματα ελέγχθηκαν ξεχωριστά μετά (έναντι του ELOT 743/κοινής χρήσης μεταγραφής) και είναι σωστά.
+
+**Διόρθωση:** νέο migration file `supabase/migrations/20260906081515_fix_slugify_beta_transliteration.sql` — διορθώνει το `slugify()` (`CREATE OR REPLACE FUNCTION`) και μηδενίζει το `slug` σε ΟΛΑ τα products/events ώστε το trigger να τα ξαναφτιάξει σωστά (ασφαλές: κανένα slug link δεν έχει μοιραστεί ακόμα δημόσια εκτός του σημερινού testing). Διορθώθηκε επίσης το αρχικό migration file (`20260906075738_...sql`) ώστε να είναι σωστό από την αρχή σε τυχόν μελλοντικό fresh-DB run.
+
+### 🐛 Δεύτερο fix, κατόπιν ρητού αιτήματος του χρήστη: δίφθογγοι αυ/ευ/ου
+Ο χρήστης ζήτησε να διορθωθεί και ο περιορισμός που είχε ήδη επισημανθεί (βλ. παραπάνω): το `slugify()` δεν χειριζόταν τους διφθόγγους **αυ/ευ** (προφέρονται "v" πριν από φωνήεν/ηχηρό σύμφωνο, αλλιώς "f") ούτε το **ου** (καθιερωμένη μεταγραφή "ou", όχι "oy"). Νέο migration file: `supabase/migrations/20260906082334_fix_slugify_au_eu_ou_digraphs.sql` — προσθέτει τρία `regexp_replace` βήματα πριν το υπάρχον `translate()`, χρησιμοποιώντας bracket character classes (π.χ. `[αΑ][υύΥΎ]`) αντί για case-insensitive regex flag, ώστε να μη βασίζεται σε Unicode case-folding που εξαρτάται από το locale της βάσης (ίδια λογική ασφάλειας με το ήδη υπάρχον `translate()`). Σωστά αγνοεί το "οϋ"/"αϋ" με διαλυτικά (εκεί τα φωνήεντα προφέρονται σκόπιμα ξεχωριστά, όχι ως δίφθογγος). Ίδιο μηδενισμό+regenerate των slugs όπως στο πρώτο fix. Ενημερώθηκε και το αρχικό migration file (`20260906075738_...sql`) για μελλοντικό fresh-DB setup.
+
+**Verification πριν παρουσιαστεί:** προσομοίωση της ίδιας λογικής σε Python πάνω σε 15 δοκιμαστικές λέξεις (τα 5 ήδη υπάρχοντα ονόματα προϊόντων/events + 10 γνωστές ελληνικές λέξεις με αυ/ευ/ου σε διαφορετικά συμφραζόμενα: Ελευθερία, Αύγουστος, Αυγή, παύω, ούζο, Χριστούγεννα, αυτός, Θεσσαλονίκη, Ψυχή) — όλα σωστά, καμία παλινδρόμηση στα ήδη σωστά slugs.
+- **✅ Επιβεβαιώθηκε σε πραγματικό browser από τον χρήστη:** νέο slug link προϊόντος (`/merch/product/villagers-t-shirt-black`), παλιό UUID link ίδιου προϊόντος, και UUID/slug link event — όλα ανοίγουν σωστά το ίδιο modal. **Slug migration — πλήρως ολοκληρωμένο.**
+
+## EventInfoDialog → URL (ολοκληρώθηκε)
+
+### Τι άλλαξε
+Το "Info" modal στα event cards άνοιγε ως τοπικό `<Dialog>` state (μέσα στο ίδιο το `EventInfoDialog.jsx`, με δικό του `DialogTrigger`), χωρίς δικό του URL — τελευταίο κομμάτι που είχε μείνει εκτός routing από το αρχικό scope.
+
+- **`src/main.jsx`** — νέο **sibling** child route κάτω από `events`: `{ path: 'event/:eventId/info', element: <EventInfoRoute /> }`, δίπλα στο ήδη υπάρχον `event/:eventId` (Ticket). Sibling και όχι nested μέσα στο ticket route, ώστε το Info να ανοίγει απευθείας πάνω στη λίστα χωρίς να περνάει από το Ticket modal.
+- **`src/components/Events/EventInfoRoute.jsx`** (νέο) — ίδιο pattern με το `EventModalRoute.jsx`: `useEvents(tenantId)`, `isUuid()` dual lookup (UUID ή slug), `<Navigate replace />` fallback σε σπασμένο link, `location.key === "default"` detection. Μοναδική διαφορά: επειδή το route είναι ένα επίπεδο πιο βαθιά (`event/:eventId/info`), χρησιμοποιεί `"../.."` αντί για `".."` ώστε να γυρίζει στη λίστα events και όχι στο ticket route. Καμία ανάγκη για auth gate — το Info είναι καθαρά πληροφοριακό, καμία ενέργεια αγοράς.
+- **`src/components/Events/EventInfoDialog.jsx`** — μετατράπηκε σε controlled dialog (`open`/`onOpenChange` props), ίδιος μετασχηματισμός με το `TicketDialog` νωρίτερα σήμερα. Αφαιρέθηκε το εσωτερικό `DialogTrigger`/button.
+- **`src/components/Events/EventsList.jsx`** — το κουμπί "Info" έγινε πραγματικό `<Link to="event/:slug/info">` (ίδιο μοτίβο με Ticket), αντί να καλεί `<EventInfoDialog>` inline.
+
+### Verification
+- `grep` για stray αναφορές σε `EventInfoDialog` — μόνο οι αναμενόμενες (`EventInfoRoute.jsx` import/χρήση, και το ίδιο το component file). Καμία σπασμένη αναφορά.
+- **Lint:** μηδέν νέα errors (ίδια 13 προϋπάρχοντα σε `ui/*`).
+- **Build:** περνάει.
+- **Δεν έγινε ακόμα:** browser click-test του νέου Info link (άνοιγμα/κλείσιμο, right-click/"open in new tab", back-button).
+
+### 🐛 Bug εντοπίστηκε από τον χρήστη στο browser test: λάθος `".."` υπολογισμός
+Άνοιγμα του `/events/event/<slug>/info` σε νέο tab (shared-link, `cameFromSharedLink = true`) και κλείσιμο (X) πήγαινε στο **`/`** (ρίζα) αντί για το **`/events`** (λίστα). Αιτία: υπέθεσα ότι το relative `".."` του React Router μετράει `/` στο URL string, οπότε επειδή το path `event/:eventId/info` έχει ένα επιπλέον segment σε σχέση με το `event/:eventId`, έβαλα `"../.."`. Λάθος υπόθεση — το React Router μετράει βάθος **route-tree**, όχι URL segments: το `EventInfoRoute` είναι sibling child του `events` route (ίδιο βάθος με το `EventModalRoute`), άρα ένα `".."` αρκεί, ό,τι κι αν λέει το path string. Διορθώθηκε (`"../.."` → `".."`, και στα δύο σημεία: `handleClose` και το `<Navigate>` fallback). Lint+build ξαναπέρασαν.
+
+## Home tab ("Πληροφορίες") → ονομασμένο route `/about` (ολοκληρώθηκε)
+
+### Γιατί
+Ο χρήστης θα πουλήσει το Concerto σε tenant/venue managers (όχι μόνο μπάντες). Το home tab ήταν ήδη route, αλλά ως **ανώνυμο index route στο `/`** — χωρίς δικό του, ορατό/μοιράσιμο όνομα path, σε αντίθεση με `/merch`/`/events`. Ζητήθηκε ρητά όνομα route, με τον χρήστη να ζητάει από εμένα πρόταση. Πρότεινα `/about` (καθιερωμένη σύμβαση "About" σε κάθε site, ουδέτερο σε band/venue/festival tenant) — εγκρίθηκε.
+
+### Υλοποίηση
+- **`src/main.jsx`** — το index route (`/`) έγινε `<Navigate to="/about" replace />` (redirect, όχι 404 — το γυμνό domain συνεχίζει να δείχνει το ίδιο περιεχόμενο). Νέο route `{ path: 'about', element: <InfoRoute /> }` κάνει το πραγματικό rendering.
+- **`src/components/Header/Header.jsx`** — το `handleTabClick` για το tab "Πληροφορίες" κάνει πλέον `navigate('/about')` απευθείας (όχι `navigate('/')` + redirect hop). Το `activeTab` logic **δεν χρειάστηκε αλλαγή** — το `/about` ήδη πέφτει στο else-branch (ούτε `/merch*` ούτε `/events*`), ίδιο αποτέλεσμα με πριν.
+- Το `<Link to="/">` στο `ErrorPage.jsx` ("← Αρχική σελίδα") **δεν άλλαξε** — συνεχίζει να δουλεύει σωστά μέσω του ίδιου redirect.
+- **Εκτός scope, σκόπιμα:** το component/folder `BandInfo` (`src/components/BandInfo/`) παραμένει ως έχει — η ονομασία είναι band-specific, κάτι που ίσως αξίζει rename αργότερα (π.χ. σε `About`) μιας και θα πουληθεί και σε venues, αλλά ο χρήστης ζήτησε συγκεκριμένα το route name, όχι refactor του component/folder. Flagged για μελλοντική συζήτηση, όχι πειραγμένο τώρα.
+
+### Verification
+- **Lint:** μηδέν νέα errors. **Build:** περνάει.
+- Το redirect χρησιμοποιεί `replace: true`, άρα το `/` δεν μπαίνει στο browser history — το back-button δεν κολλάει σε redirect loop.
+- **✅ Επιβεβαιώθηκε σε πραγματικό browser από τον χρήστη:** `villagers.concerto.gr/` κάνει redirect σε `/about`, το tab "Πληροφορίες" δείχνει `/about` στη γραμμή διεύθυνσης και είναι highlighted.
+
+## Πλήρες browser testing (ολοκληρώθηκε, αυτόματα μέσω Claude in Chrome)
+
+Ο χρήστης συνέδεσε το Claude in Chrome extension (το built-in browser pane δεν έβλεπε το `/etc/hosts` του μηχανήματος, οπότε δεν μπορούσε να τεστάρει tenant subdomains — το πραγματικό Chrome δουλεύει κανονικά). Πλήρες αυτόματο pass πάνω στο live dev server (`npm run dev`, villagers.concerto.gr:5173 / athensrock.concerto.gr:5173):
+
+- **`/` → `/about` redirect**: ✅ δουλεύει, σωστό περιεχόμενο.
+- **Merch**: κατηγορίες → λίστα προϊόντων → product modal μέσω slug URL (`.../product/villagers-t-shirt-black`) → **back-button** κλείνει το modal και γυρνάει στη λίστα (όχι έξω από το site). ✅
+- **Events**: Ticket modal μέσω slug URL → **back-button** ✅. Info modal μέσω slug URL, **σε νέο tab (shared-link σενάριο)** → X-close πάει σωστά στο `/events` — **επιβεβαιώθηκε το σημερινό "../.." → ".." bugfix**. ✅
+- **404**: άγνωστο path → σωστή ErrorPage. ✅
+- **Cross-tenant isolation**: `athensrock.concerto.gr` δείχνει διαφορετικό branding (λογότυπο/όνομα "Athens Rock Festival"), μηδέν διαρροή δεδομένων από το villagers — άδειες κατηγορίες merch, "Δεν υπάρχουν events αυτή τη στιγμή" (το tenant αυτό δεν έχει events/προϊόντα seed data, σωστά isolated). Παρατήρηση εκτός scope: το bio κείμενο στο "Πληροφορίες" είναι πανομοιότυπο και στα δύο tenants — φαίνεται seed/test data συνήθεια, όχι routing bug, δεν πειράχτηκε.
+- **Mobile viewport** (390×844): `/about` και το product modal renders καθαρά, responsive. ✅
+- **Λογική "public view, gate μόνο στην ενέργεια"** (η σημερινή αρχική απόφαση): σε αποσυνδεδεμένη κατάσταση, το product/ticket modal ανοίγει δημόσια, αλλά "Προσθήκη στο καλάθι" ΚΑΙ "Επιλογή" (ticket) ενεργοποιούν σωστά το auth-gate dialog ("Σύνδεση — Συνέχεια με Google"). ✅ Επιβεβαιώνει ότι το αρχικό pattern (πριν το revert που έγινε νωρίτερα σήμερα) παραμένει σωστό.
+
+**Δεν καλύφθηκε πλήρως:** literal Incognito/Private window (το Chrome προφίλ που χρησιμοποιήθηκε ήταν ήδη αποσυνδεδεμένο, που λειτουργικά καλύπτει το ίδιο σενάριο, αλλά δεν είναι κυριολεκτικά νέο προφίλ/session). Right-click "open in new tab" σε cards δεν ξαναδοκιμάστηκε αυτόματα (ήδη επιβεβαιωμένο χειροκίνητα από τον χρήστη νωρίτερα σήμερα για CategoryGrid/ProductList/EventsList).
+
 ## Εξαρτήσεις
-- Θα χρειαστεί μικρό DB migration αργότερα: προσθήκη `slug` column στα `events` και `products` (για όμορφα URLs, π.χ. `villagers-tshirt-black` αντί για UUID) — ήδη προβλεπόταν στο κύριο brief, ενότητα "UX/ARCHITECTURE GAP".
-- Μετά την ολοκλήρωση, ξεκινά το Checkout/reservation flow (μεγάλο task, χτίζεται πάνω σε αυτό το routing).
+- Το routing epic (Σάββατο 5/9 → Κυριακή 6/9) είναι πλέον πλήρως ολοκληρωμένο και δοκιμασμένο. Ξεκινά το Checkout/reservation flow όποτε αποφασίσει ο χρήστης (μεγάλο task, χτίζεται πάνω σε αυτό το routing).
 
 ---
 

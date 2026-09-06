@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import MerchCategoriesRoute from './components/Merch/MerchCategoriesRoute.jsx'
@@ -9,6 +9,7 @@ import MerchCategoryRoute from './components/Merch/MerchCategoryRoute.jsx'
 import ProductModalRoute from './components/Merch/ProductModalRoute.jsx'
 import EventsRoute from './components/Events/EventsRoute.jsx'
 import EventModalRoute from './components/Events/EventModalRoute.jsx'
+import EventInfoRoute from './components/Events/EventInfoRoute.jsx'
 import InfoRoute from './components/BandInfo/InfoRoute.jsx'
 import ErrorPage from './components/ErrorPage/ErrorPage.jsx'
 
@@ -22,9 +23,12 @@ const router = createBrowserRouter([
     // routes· επίσημο React Router pattern, ένα errorElement στη ρίζα αρκεί.
     errorElement: <ErrorPage />,
     children: [
-      // '/' index → Πληροφορίες tab (bio + BandInfo). Route πλέον, όχι state,
-      // ίδια αρχιτεκτονική λογική με Merch/Events.
-      { index: true, element: <InfoRoute /> },
+      // '/' → redirect στο '/about': πραγματικό, ονομασμένο path (όπως
+      // /merch, /events) αντί για ανώνυμο index route, ώστε να έχει δικό του
+      // ορατό/μοιράσιμο URL. Το γυμνό domain συνεχίζει να δουλεύει όπως πριν
+      // (redirect, όχι 404) — δεν αλλάζει τίποτα για τον επισκέπτη.
+      { index: true, element: <Navigate to="/about" replace /> },
+      { path: 'about', element: <InfoRoute /> },
       // /merch → πλέγμα κατηγοριών. Το προϊόν είναι child route, οπότε το modal
       // κάθεται πάνω στο πλέγμα χωρίς κόλπα με location state.
       {
@@ -44,7 +48,12 @@ const router = createBrowserRouter([
       {
         path: 'events',
         element: <EventsRoute />,
-        children: [{ path: 'event/:eventId', element: <EventModalRoute /> }],
+        children: [
+          { path: 'event/:eventId', element: <EventModalRoute /> },
+          // Sibling route, όχι nested μέσα στο ticket route: το Info modal
+          // ανοίγει απευθείας πάνω στη λίστα, χωρίς να περνάει από το Ticket.
+          { path: 'event/:eventId/info', element: <EventInfoRoute /> },
+        ],
       },
     ],
   },

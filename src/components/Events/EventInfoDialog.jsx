@@ -1,29 +1,20 @@
-import { InformationCircleIcon } from "@heroicons/react/20/solid"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { getMapsUrl } from "../../lib/maps"
 
-export default function EventInfoDialog({ event }) {
-  return (
-    <Dialog>
-      <div className="flex w-full min-w-0 flex-1">
-        <DialogTrigger asChild>
-          <button
-            type="button"
-            className="relative inline-flex w-full items-center justify-center gap-x-3 rounded-br-lg border border-transparent py-4 text-sm font-semibold text-gray-900"
-          >
-            <InformationCircleIcon aria-hidden="true" className="size-5 text-gray-400" />
-            Info
-          </button>
-        </DialogTrigger>
-      </div>
+// Controlled dialog (open/onOpenChange) — ίδιο pattern με το TicketDialog: το
+// άνοιγμα είναι δημόσιο URL route (/events/event/:eventId/info), όχι τοπικό
+// Dialog state. Το κουμπί "Info" (πλέον <Link>) ζει στο EventsList.
+export default function EventInfoDialog({ event, open, onOpenChange }) {
+  if (!event) return null
 
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Πληροφορίες</DialogTitle>

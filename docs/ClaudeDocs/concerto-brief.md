@@ -258,7 +258,8 @@ primary_color, secondary_color, bio, created_at
 ### `events`
 ```
 id, tenant_id (FK), title, description, date, location, location_url,
-image_url, capacity, tickets_sold, created_at
+image_url, capacity, tickets_sold, created_at,
+slug (νέο, 6/9 — text, NOT NULL, UNIQUE ανά tenant_id, auto-generated από DB trigger)
 ```
 > Σημείωση: `capacity`/`tickets_sold` είναι προσωρινά — θα αντικατασταθούν από αθροίσματα του `tickets` table.
 
@@ -286,7 +287,8 @@ id, fan_id (FK), tenant_id (FK), followed_at
 ```
 id, tenant_id (FK), name, description, price, category (check: 'clothing'|'music'|'various'),
 image_urls (text[] — πολλαπλές φωτογραφίες ανά προϊόν), stock_quantity, sku,
-sort_order, is_active, created_at
+sort_order, is_active, created_at,
+slug (νέο, 6/9 — text, NOT NULL, UNIQUE ανά tenant_id, auto-generated από DB trigger)
 ```
 Τρεις σταθερές κατηγορίες (`clothing`, `music`, `various` — π.χ. αφίσες, κούπες) — απλό `check` constraint, όχι ξεχωριστό categories table. Το "New Arrivals" στο frontend δεν είναι δικό του πεδίο· φιλτράρεται client-side με βάση `created_at` μέσα στους **τελευταίους 6 μήνες** (σημαντική λεπτομέρεια, μην ξεχαστεί). Δοκιμαστικά δεδομένα: 2 προϊόντα ρουχισμού (T-Shirt, Hoodie) + 2 μουσικής (βινύλιο, CD) για το Villagers Band, με placeholder εικόνες.
 
@@ -465,7 +467,7 @@ values (
 ⏳ Product variants (μεγέθη ρούχων S/M/L/XL) — δεν έχει σχεδιαστεί· το ProductQuickShop έχει ήδη λειτουργικό size-picker UI, αλλά χωρίς πραγματικό stock ανά μέγεθος από πίσω
 ✅ Database indexing — **ΟΛΟΚΛΗΡΩΘΗΚΕ.** Indexes σε όλα τα foreign keys (events, tickets, products, tenant_domains, tenant_settings, tenant_follows, favorites, cart_items).
 ✅ RLS audit πλήρους βάσης — **ΟΛΟΚΛΗΡΩΘΗΚΕ.** Όλα τα 10 tables επιβεβαιωμένα με ενεργό RLS (`rowsecurity = true`) + έλεγχος όλων των policies. Αποτέλεσμα: καμία πραγματική τρύπα ασφαλείας. Δύο μικρά, αναμενόμενα κενά εντοπίστηκαν: (α) καμία write policy στα "δημόσια" tables (events/products/tickets/tenants/tenant_settings/tenant_domains) — αναμενόμενο, θα προστεθούν μαζί με το Tenant Admin Dashboard· (β) έλειπε DELETE policy στο `tenant_follows` (unfollow) — **διορθώθηκε άμεσα**, προστέθηκε το policy (δεν υπάρχει ακόμα UI κουμπί "unfollow", μόνο η δυνατότητα σε επίπεδο βάσης).
-🟡 **React Router (routing)** — **σε εξέλιξη, Σάββατο 5/9.** Merch, Events, και το tab Πληροφορίες (home) έγιναν πραγματικά routes με το επίσημο Data Router pattern, lint+build περνάνε. **Εκκρεμούν ακόμα** από το αρχικό scope της ενότητας "UX/ARCHITECTURE GAP": slug migration (URLs σε UUID ακόμα, σκόπιμα αναβεβλημένο), ProductList/EventsList cards ως πραγματικά `<Link>` (τώρα είναι κουμπιά με `navigate()` — δουλεύουν αλλά δεν κάνουν right-click/"open in new tab"), EventInfoDialog να ενημερώνει URL (δεν το κάνει ακόμα), 404 handling (δεν υπάρχει `errorElement`/catch-all route), και **καμία δοκιμή σε πραγματικό browser** ακόμα (cross-tenant, mobile/desktop, back-button). Λεπτομερές, ζωντανό log στο `concerto-react-router-brief.md`.
+✅ **React Router (routing) — ΟΛΟΚΛΗΡΩΘΗΚΕ, Σάββατο 5/9 → Κυριακή 6/9.** Merch, Events, home tab σε `/about`, 404 handling, cards ως πραγματικά `<Link>`, slug migration (με 2 bugfixes), EventInfoDialog ως route (με 1 bugfix), και **πλήρες αυτόματο browser testing** (cross-tenant isolation, mobile viewport, back-button, logged-out auth-gate behavior) — όλα browser-confirmed μέσω Claude in Chrome. **Εκκρεμεί μόνο**: commit/push της σημερινής δουλειάς. Λεπτομερές, ζωντανό log στο `concerto-react-router-brief.md`.
 ⏳ Cart persistence (νέο `cart_items` table, fan_id-based, όχι tenant-based) — **σκόπιμα σε αναμονή, κατόπιν ρητής επιλογής του χρήστη**, όχι ξεχασμένο.
 ⏳ ProductQuickShop "Πληρωμή" κουμπί — παραμένει placeholder/disabled, σωστά (δεν υπάρχει ακόμα σύστημα πληρωμών)
 ⏳ BandInfo component — υπάρχει στη δομή, περιεχόμενο/λειτουργικότητα δεν έχει δουλευτεί ακόμα

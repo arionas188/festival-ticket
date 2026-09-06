@@ -71,7 +71,7 @@ export default function ProductList({ products, fanId, isLoggedIn, onRequireAuth
                   {/* asChild + Link: πραγματικό <a>, ίδιο styling με το Button
                       (ίδιο Radix Slot pattern με DialogTrigger/DialogClose asChild) */}
                   <Button asChild variant="outline" className="mt-3 w-full">
-                    <Link to={`product/${product.id}`}>
+                    <Link to={`product/${product.slug}`}>
                       Γρήγορη αγορά
                       <ShoppingCartIcon className="ml-2 size-4" />
                     </Link>
