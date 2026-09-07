@@ -1,20 +1,17 @@
 import { EnvelopeIcon, PhoneIcon, PlusIcon } from '@heroicons/react/20/solid'
-import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from "@/components/ui/button"
 import bandLogoFallback from '../../assets/images/MwraStiFwtia.png'
 import bandCoverFallback from '../../assets/images/MwraStiFwtiaBand.webp'
 import TenantTopBar from "./TenantTopBar"
-import AuthGateDialog from "./AuthGateDialog"
 import { useAuth } from "../../hooks/useAuth"
-import { supabase } from "../../lib/supabase"
 import { useFanSession } from "../../queries/useFanSession"
 import { useCart } from "../../queries/useCart"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 
 const TABS = ['Πληροφορίες', 'Εκδηλώσεις', 'Merch Store']
 
-export default function Header({ tenant, settings }) {
+export default function Header({ tenant, settings, onRequireAuth }) {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -27,7 +24,6 @@ export default function Header({ tenant, settings }) {
       ? 'Εκδηλώσεις'
       : 'Πληροφορίες'
 
-  const [authGateOpen, setAuthGateOpen] = useState(false)
   const { user, isLoggedIn } = useAuth()
   const { addItem } = useCart(user?.id)
   const { data: isFollowing, isLoading: followLoading } = useFanSession(isLoggedIn ? user : null, tenant?.id)
@@ -35,16 +31,17 @@ export default function Header({ tenant, settings }) {
   const { data: favoriteIds = [] } = useFavorites(user?.id)
   const toggleFavorite = useToggleFavorite(user?.id)
 
+  // Το login γίνεται πλέον αποκλειστικά από το global ConcertoBar (πάνω από
+  // το header — βλ. App.jsx, το onRequireAuth prop ανοίγει το dialog εκεί).
+  // Το παλιό, τοπικό AuthGateDialog παραμένει στον φάκελο, ανενεργό — βλ.
+  // concerto-react-router-brief.md. Ίδιο onRequireAuth χρησιμοποιείται και
+  // για "Ακολούθησε" εδώ, και περνιέται στα child routes (π.χ. "πρόσθεσε στο
+  // καλάθι"/"αγαπημένα"/"εισιτήριο" όταν δεν είσαι συνδεδεμένος) μέσω Outlet
+  // context παρακάτω.
   function handleFollowClick() {
     if (!isLoggedIn) {
-      setAuthGateOpen(true)
-      return
+      onRequireAuth()
     }
-  }
-
-  // Κοινό callback: κάθε σημείο που χρειάζεται login το καλεί, αντί να διαχειρίζεται δικό του modal
-  function requireAuth() {
-    setAuthGateOpen(true)
   }
 
   function handleAddToCart(product, quantity) {
@@ -71,10 +68,10 @@ export default function Header({ tenant, settings }) {
     navigate(`/merch/product/${product.id}`)
   }
 
-  const bandName = settings?.display_name || tenant?.name
-  const bandBio = settings?.bio
-  const bandLogo = settings?.logo_url || bandLogoFallback
-  const bandCover = settings?.cover_image_url || bandCoverFallback
+  const tenantName = settings?.display_name || tenant?.name
+  const tenantBio = settings?.bio
+  const tenantLogo = settings?.logo_url || bandLogoFallback
+  const tenantCover = settings?.cover_image_url || bandCoverFallback
 
   const showTopBar = isLoggedIn && isFollowing
 
@@ -86,7 +83,7 @@ export default function Header({ tenant, settings }) {
     <div className="min-h-screen bg-white">
       <img
         alt=""
-        src={bandCover}
+        src={tenantCover}
         className="h-40 w-full rounded-b-2xl object-cover object-[50%_35%] sm:h-64 sm:w-2/3 sm:mx-auto"
       />
 
@@ -94,7 +91,7 @@ export default function Header({ tenant, settings }) {
         <div className="-mt-12 flex items-end gap-4 sm:-mt-14">
           <img
             alt=""
-            src={bandLogo}
+            src={tenantLogo}
             className="size-24 rounded-full ring-4 ring-white sm:size-32"
           />
 
@@ -102,7 +99,6 @@ export default function Header({ tenant, settings }) {
             <div className="mb-1 flex-1">
               <TenantTopBar
                 fanAvatarUrl={user?.user_metadata?.avatar_url}
-                onSignOut={() => supabase.auth.signOut()}
                 tenantId={tenant?.id}
                 fanId={user?.id}
                 onQuickBuy={handleSelectProduct}
@@ -121,8 +117,10 @@ export default function Header({ tenant, settings }) {
         </div>
 
         <div className="mt-3">
-          <h1 className="text-xl font-bold text-gray-900">{bandName}</h1>
-          <p className="text-sm text-gray-400">Καλλιτέχνης</p>
+          <h1 className="text-xl font-bold text-gray-900">{tenantName}</h1>
+          {settings?.category_label && (
+            <p className="text-sm text-gray-400">{settings.category_label}</p>
+          )}
         </div>
 
         <div className="mt-6 flex items-center gap-2">
@@ -150,9 +148,11 @@ export default function Header({ tenant, settings }) {
               tenantId: tenant?.id,
               fanId: user?.id,
               isLoggedIn,
-              onRequireAuth: requireAuth,
+              onRequireAuth,
               onAddToCart: handleAddToCart,
-              bandBio,
+              tenantType: tenant?.type,
+              tenantBio,
+              galleryUrls: settings?.gallery_urls,
             }}
           />
         </div>
@@ -175,13 +175,6 @@ export default function Header({ tenant, settings }) {
         </div>
       </div>
 
-      <AuthGateDialog
-        open={authGateOpen}
-        onOpenChange={setAuthGateOpen}
-        tenantName={bandName}
-        tenantLogo={bandLogo}
-        tenantCover={bandCover}
-      />
     </div>
   )
 }

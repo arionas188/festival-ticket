@@ -277,7 +277,205 @@
 **Δεν καλύφθηκε πλήρως:** literal Incognito/Private window (το Chrome προφίλ που χρησιμοποιήθηκε ήταν ήδη αποσυνδεδεμένο, που λειτουργικά καλύπτει το ίδιο σενάριο, αλλά δεν είναι κυριολεκτικά νέο προφίλ/session). Right-click "open in new tab" σε cards δεν ξαναδοκιμάστηκε αυτόματα (ήδη επιβεβαιωμένο χειροκίνητα από τον χρήστη νωρίτερα σήμερα για CategoryGrid/ProductList/EventsList).
 
 ## Εξαρτήσεις
-- Το routing epic (Σάββατο 5/9 → Κυριακή 6/9) είναι πλέον πλήρως ολοκληρωμένο και δοκιμασμένο. Ξεκινά το Checkout/reservation flow όποτε αποφασίσει ο χρήστης (μεγάλο task, χτίζεται πάνω σε αυτό το routing).
+- Το routing epic (Σάββατο 5/9 → Κυριακή 6/9) είναι πλέον πλήρως ολοκληρωμένο, δοκιμασμένο, **committed και pushed**. Commit `be03c85` ("nai as kanoume ena kalo commit..."), push επιβεβαιωμένο από τον χρήστη (`a672ce5..be03c85 main -> main`). Ξεκινά το Checkout/reservation flow όποτε αποφασίσει ο χρήστης (μεγάλο task, χτίζεται πάνω σε αυτό το routing).
+
+## Tenant types (artist/venue/festival) + polymorphic `/about` — ολοκληρώθηκε (lint + build περνάνε, εκκρεμεί browser verification)
+
+### Απόφαση
+Πέρα από artist tenants (μπάντες), η πλατφόρμα θα φιλοξενεί και venue/live-stage και festival tenants (βλ. `concerto-business-venue-partnerships-brief.md`). Αποφασίστηκε ρητό πεδίο `tenants.type` (`artist`/`venue`/`festival`, check constraint — ίδιο πνεύμα με `products.category`) αντί για καθαρά data-driven inference, γιατί με 3 τύπους και πολλαπλά type-specific sections η εικασία από απουσία δεδομένων γίνεται εύθραυστη (και χρειάζεται ρητό type ούτως ή άλλως για το μελλοντικό Tenant Admin Dashboard/cross-listing UI). Ξεχωριστό, καθαρά διακοσμητικό πεδίο `tenant_settings.category_label` (ελεύθερο κείμενο, π.χ. "Μουσικό Συγκρότημα"/"DJ"/"Live Stage"/"Φεστιβάλ") κρατάει το `type` μικρό/σταθερό χωρίς να χρειάζεται νέο enum value ή migration για κάθε νέο "είδος" tenant. **Ρητός κανόνας:** το `category_label` δεν μπαίνει ΠΟΤΕ σε λογική απόφασης/`if` — μόνο το `type` αποφασίζει ποιο section φορτώνει.
+
+### Migration (έτρεξε ο χρήστης στο Supabase SQL editor, 7/9)
+```sql
+alter table tenants add column type text not null default 'artist'
+  check (type in ('artist', 'venue', 'festival'));
+update tenants set type = 'festival' where slug = 'athens-rock';
+
+alter table tenant_settings add column gallery_urls text[] not null default '{}';
+alter table tenant_settings add column category_label text;
+update tenant_settings set category_label = 'Μουσικό Συγκρότημα' where tenant_id = (select id from tenants where slug = 'villagers');
+update tenant_settings set category_label = 'Φεστιβάλ' where tenant_id = (select id from tenants where slug = 'athens-rock');
+```
+Επιβεβαιώθηκε από τον χρήστη: `villagers` → `type='artist'`, `athens-rock` → `type='festival'`, `category_label` σωστά και στα δύο.
+
+### Component/data layer
+- **`src/queries/useTenant.js`** — το `tenants` sub-select έκανε explicit `id, name, slug` (όχι `select('*')`), οπότε το νέο `type` δεν θα περνούσε καθόλου στο frontend χωρίς αλλαγή· προστέθηκε ρητά.
+- **`src/components/BandInfo/` → `src/components/About/`** (`git mv`, φάκελος) — ταιριάζει πλέον με το route name `/about`.
+- **`BandInfo.jsx` → `TenantAbout.jsx`** (rename, ίδιο περιεχόμενο) — γενικό όνομα· το component μένει hardcoded test-data κείμενο όπως πριν (εκτός scope, ήδη τεκμηριωμένο στο κύριο brief).
+- **Νέο `LocationGallery.jsx`** (ονομάστηκε `VenueGallery.jsx` αρχικά, μετονομάστηκε — βλ. παρακάτω) — ίδιο πνεύμα με `BandMembers.jsx` (τίτλος+subtitle+grid, καθαρά data-driven: `null` αν άδειο `gallery_urls`), αλλά ξεχωριστό component από το `BandMembers` γιατί το layout είναι πραγματικά διαφορετικό (ορθογώνιες φωτογραφίες χώρου, όχι στρογγυλά avatar προσώπων με όνομα/ρόλο).
+- **`InfoRoute.jsx`** — `bandBio`→`tenantBio` context rename, νέο `tenantType`/`galleryUrls` από context. Ένα μόνο branching point πάνω σε `tenantType`: `artist` → `<TenantAbout />` + `<BandMembers members={members} />` (το query ενεργοποιείται μόνο όταν `tenantType === 'artist'`, `useBandMembers(tenantType === 'artist' ? tenantId : null)` — αποφεύγει άσκοπο query για venue/festival tenants)· `venue` **ή** `festival` → `<LocationGallery photos={galleryUrls} />` (και τα δύο έχουν φυσικό χώρο άξιο φωτογράφισης — αναθεωρήθηκε την ίδια μέρα, βλ. παρακάτω).
+- **`Header.jsx`** — `bandBio`/`bandName`/`bandLogo`/`bandCover` local variables → `tenantBio`/`tenantName`/`tenantLogo`/`tenantCover` (καθαρά cosmetic, καμία εξωτερική επίπτωση). Το hardcoded `<p>Καλλιτέχνης</p>` κάτω από το tenant name έγινε `{settings?.category_label && <p>{settings.category_label}</p>}` — δυναμικό, κρύβεται αν δεν έχει οριστεί.
+- **`main.jsx`** — ενημερώθηκε το import path του `InfoRoute` μετά το folder rename. Καμία αλλαγή routes.
+
+### Revision αυθημερόν: `VenueGallery` → `LocationGallery`, και το festival παίρνει gallery
+Αρχικά το gallery είχε σχεδιαστεί μόνο για `venue`. Ο χρήστης επισήμανε ότι ένα festival γίνεται επίσης κάπου (φυσικός χώρος), άρα έχει το ίδιο νόημα να δείχνει φωτογραφίες χώρου. Αντί για δεύτερο, σχεδόν πανομοιότυπο component, το `VenueGallery.jsx` μετονομάστηκε σε `LocationGallery.jsx` (ίδιο πνεύμα με το `BandInfo`→`TenantAbout` rename — δεν κρατάμε "leaky" όνομα δεμένο σε έναν μόνο τύπο tenant), και το `InfoRoute.jsx` το εμφανίζει πλέον για `venue` ΚΑΙ `festival`. Καμία αλλαγή στη βάση χρειάστηκε.
+
+### DJ / μεμονωμένος καλλιτέχνης (συζητήθηκε, καμία νέα δουλειά)
+Ρητά αποφασίστηκε ότι DJ/solo artist χρησιμοποιεί το ΙΔΙΟ `BandMembers` component/`band_members` table με τη μπάντα — ίδια πεδία (φωτογραφία/όνομα/ρόλος), απλά 1 row αντί για πολλά. Καμία ειδική περίπτωση κώδικα, καμία νέα table.
+
+### Verification
+- **Lint:** `npx eslint src/` — μηδέν νέα errors (ίδια 13 προϋπάρχοντα σε `src/components/ui/*`, επιβεβαιωμένα άσχετα).
+- **Build:** `npm run build` περνάει καθαρό.
+- **Δεν έγινε ακόμα:** browser test (`villagers.concerto.gr/about` δείχνει σωστά bio+members· δοκιμαστικό tenant με `type='venue'` δείχνει gallery αντί για members· `type='festival'` δείχνει μόνο bio).
+- **Δεν έγινε commit.**
+
+### Επόμενο (ανοιχτό, εκτός σημερινού scope)
+Επιπλέον custom tabs ανά τύπο tenant (π.χ. `/lineup`, `/φωτογραφίες-παλιού-φεστιβάλ` για festival) — μεγαλύτερο, ξεχωριστό θέμα (αλλαγή στο πώς υπολογίζονται τα tabs στο `Header.jsx`, σήμερα σταθερά 3 για όλους). Αναβλήθηκε ρητά μέχρι να υπάρξει συγκεκριμένη ανάγκη, αντί να χτιστεί πρόωρα κάτι γενικό.
+
+---
+
+## Bug: "zombie session" μετά από διαγραφή λογαριασμού σε άλλο subdomain — ΕΚΚΡΕΜΕΙ (7/9, pausing για δουλειά)
+
+### Σενάριο (αναπαράχθηκε 2 φορές από τον χρήστη)
+1. Σύνδεση με Google σε δύο tenant subdomains ταυτόχρονα (π.χ. `athensrock.concerto.gr` και `villagers.concerto.gr`) — κάθε subdomain έχει δικό του, ξεχωριστό `localStorage` session (προϋπάρχων, τεκμηριωμένος περιορισμός· βλ. `concerto-brief.md`).
+2. Διαγραφή λογαριασμού (νέο feature σήμερα, `delete_own_account()` RPC) από το ένα subdomain — δουλεύει σωστά εκεί.
+3. Στο άλλο subdomain, το session είναι πλέον "ζόμπι": τοπικά ακόμα "συνδεδεμένο" (JWT δεν έχει λήξει χρονικά), αλλά το υποκείμενο `auth.users` row έχει διαγραφεί.
+
+### Πρώτος γύρος fix (ήδη στο `useFanSession.js`) — ΔΕΝ αρκεί
+Προστέθηκε detection του Postgres error `23503` (FK violation) στο `fans` upsert, με fallback σε `supabase.auth.signOut({ scope: "local" })` για να καθαρίσει το τοπικό session χωρίς περιττό server round-trip.
+
+**Ο χρήστης δοκίμασε ξανά το ίδιο σενάριο (διαγραφή από athensrock ΚΑΙ villagers) και το bug επιμένει.** Νέο στοιχείο από το console:
+```
+POST .../rest/v1/fans?on_conflict=id            409 (Conflict)   ← ίδιο όπως πριν
+POST .../auth/v1/logout?scope=local             403 (Forbidden)  ← ΝΕΟ
+```
+Δηλαδή το ίδιο το `signOut({ scope: "local" })` που έγραψα ως "self-healing" fallback αποτυγχάνει με 403 — άρα, αντίθετα με ό,τι υπέθεσα, το `scope: "local"` ΔΕΝ είναι καθαρά τοπικό (χωρίς server call)· κάνει network request στο `/auth/v1/logout`, και ο server το απορρίπτει με 403 επειδή το access token αναφέρεται πλέον σε ανύπαρκτο user. Χρειάζεται να επαληθευτεί με πραγματικό network trace / source του `@supabase/supabase-js` (όχι υπόθεση) τι ακριβώς κάνει το `signOut` με `scope:"local"` σε αυτή την έκδοση, και αν αυτό το 403 μπλοκάρει το `_removeSession()`/local cleanup ή απλά πετάει exception ενώ το τοπικό storage μένει βρώμικο.
+
+### Κατάσταση
+- Ο χρήστης έχει σταματήσει εδώ για δουλειά· ρητά ζήτησε να «το λύσουμε μια και καλή» σε επόμενο πέρασμα, όχι βιαστικό patch τώρα.
+- Παραμένει σε ισχύ το χειροκίνητο workaround: `localStorage.clear()` στο affected subdomain + refresh.
+- Καμία περαιτέρω αλλαγή κώδικα έγινε μετά το πρώτο (ανεπαρκές) fix.
+
+### Επόμενα βήματα όταν ξαναπιάσουμε το θέμα
+1. Επαλήθευση πραγματικής συμπεριφοράς του `supabase.auth.signOut({scope:"local"})` σε αυτή την έκδοση του `@supabase/supabase-js` (source ή network trace), όχι υπόθεση.
+2. Πιθανή λύση: αν το session/token είναι ήδη άκυρο server-side, δεν έχει νόημα να καλέσουμε server-based signOut καθόλου — ίσως χρειάζεται καθαρισμός καθαρά τοπικού storage (χωρίς κανένα network call), π.χ. χειροκίνητο clear του σχετικού Supabase auth key από το `localStorage`, ή έλεγχος αν υπάρχει flag/παράμετρος που αποτρέπει το server call.
+3. Να ελεγχθεί αν το ίδιο pattern (FK violation → πιθανό ζόμπι session) χρειάζεται προστασία και σε `useCart.js`/`useFavorites.js`.
+4. Πλήρες browser verification, μετά documentation εδώ, μετά commit (αν ζητηθεί).
+
+### Update (ίδια μέρα, 7/9): Υλοποιήθηκε global login (shared cookie σε *.concerto.gr) — λύνει το bug στη ρίζα
+
+Αντί να κυνηγάμε το `signOut({scope:"local"})` 403 patch-πάνω-σε-patch, αποφασίστηκε (με τον χρήστη, βλ. `concerto-business-venue-partnerships-brief.md` § "Custom Domains vs Subdomains + Global SSO") να υλοποιηθεί η ήδη τεκμηριωμένη "δωρεάν" λύση: **shared session cookie με `Domain=.concerto.gr`**, αντί για το προεπιλεγμένο `localStorage` του Supabase client (που είναι per-origin — αυτό ήταν η πραγματική ρίζα του zombie-session bug, όχι κάτι που διορθώνεται με πιο έξυπνο error handling).
+
+**Δεν είναι το ίδιο με το `concertofamily.gr` redirect bridge** (εκείνο παραμένει ρητά αναβεβλημένο, για ΜΕΛΛΟΝΤΙΚΑ custom domains όπως `villagers.gr`) — αυτό εδώ αξιοποιεί ότι όλα τα σημερινά tenants είναι ήδη `*.concerto.gr` subdomains, άρα ένα domain-scoped cookie αρκεί, καμία επιπλέον υποδομή.
+
+**Νέα αρχεία/αλλαγές:**
+- **`src/lib/cookieStorage.js`** (νέο) — custom storage adapter (`getItem`/`setItem`/`removeItem`) που ο Supabase client καλεί αντί για `localStorage`. Γράφει cookie με `Domain=.concerto.gr; Path=/; SameSite=Lax` (+ `Secure` όταν https)· σε localhost/Netlify preview δεν μπαίνει `Domain` (host-only cookie, ίδια συμπεριφορά με πριν, ώστε να μη σπάσει το dev). Το session JSON (access+refresh token+user object) μπορεί να ξεπεράσει το ~4KB όριο ενός cookie (ειδικά με μεγάλο Google `user_metadata`) — γίνεται **chunking** σε `key.0`, `key.1`, ... πολλαπλά cookies όταν χρειάζεται, ίδιο threshold/μοτίβο με το επίσημο `@supabase/ssr` πακέτο (αντιμετωπίζει ακριβώς αυτό το πρόβλημα).
+- **`src/lib/supabase.js`** — προστέθηκε `auth: { storage: cookieStorage }` στο `createClient(...)`.
+
+**Τι σημαίνει αυτό για το zombie-session bug:** πλέον υπάρχει **ένα** session, μοιρασμένο σε όλα τα subdomains — όχι ένα ξεχωριστό ανά subdomain. Διαγραφή λογαριασμού σε ένα subdomain αδειάζει το ΙΔΙΟ cookie που βλέπουν όλα τα υπόλοιπα — δεν μπορεί να μείνει "ζόμπι" σε άλλο subdomain, γιατί δεν υπάρχει πια ξεχωριστό, τοπικό session εκεί. Το προηγούμενο `23503` detection/self-heal fallback στο `useFanSession.js` **έμεινε ως έχει** (defense-in-depth για άκρες περιπτώσεις — π.χ. πολλαπλά tabs, race condition κατά τη διαγραφή), αλλά δεν είναι πια η πρωτεύουσα άμυνα.
+
+**Verification μέχρι τώρα:**
+- `npx eslint src/lib/cookieStorage.js src/lib/supabase.js` — καθαρό.
+- `npm run build` — περνάει καθαρό.
+- **⚠️ ΔΕΝ έχει γίνει ακόμα browser verification** — κρίσιμο εδώ, μιας και είναι αλλαγή στο auth και είχαμε ήδη 2 φορές σήμερα bug από μη-επαληθευμένη υπόθεση. Πριν θεωρηθεί λυμένο, πρέπει να δοκιμαστεί πραγματικά: σύνδεση σε ένα subdomain → επίσκεψη άλλου subdomain χωρίς νέο login (πρέπει να είναι ήδη συνδεδεμένος) → διαγραφή λογαριασμού από το ένα → επίσκεψη του άλλου (πρέπει να εμφανίζεται αποσυνδεδεμένος, όχι 409/403 σφάλματα).
+- **Υπάρχοντα, ήδη-συνδεδεμένα sessions σε παλιό `localStorage`** δεν μεταφέρονται αυτόματα στο νέο cookie-based storage — κάθε ήδη-συνδεδεμένος fan θα χρειαστεί ένα νέο sign-in μετά το deploy αυτής της αλλαγής. Αποδεκτό pre-launch, να ειπωθεί ρητά αν γίνει deploy.
+- **Δεν έγινε commit.**
+- Ανοιχτό follow-up (ξεχωριστό, όχι επείγον): αφαίρεση του παλιού localStorage-based "Σύνδεση"/"Ακολούθησε" patch στο `useFanSession.js`/`Header.jsx` (βλ. `concerto-brief.md` TODO #12) — τώρα περιττό αφού υπάρχει πραγματικό shared session, αλλά να επιβεβαιωθεί πρώτα ότι το cookie SSO δουλεύει σωστά στο browser πριν αφαιρεθεί το παλιό fallback.
+
+---
+
+## ConcertoGlobalBar — υλοποιήθηκε (7/9, ίδια μέρα με το cookie SSO)
+
+Αυτό είναι το TODO #13 του κύριου brief ("ConcertoGlobalBar, Phase 2") — τραβήχτηκε νωρίτερα, αφού μόλις χτίστηκε το shared-cookie global login και είχε νόημα να αποκτήσει άμεσα ένα πραγματικό, ενιαίο login entry point.
+
+### Απόφαση (με τον χρήστη, 4 ανοιχτά ερωτήματα πριν ξεκινήσει κώδικας)
+1. **Νέος φάκελος `src/components/Concerto/`** — μόνο για global/cross-tenant κομμάτια (το bar τώρα, μελλοντικά ίσως directory/marketplace). Ο υπάρχων κώδικας tenant/venue/festival (About/Header/Merch/Events) μένει όπως είναι.
+2. **Global bar = μόνη είσοδος login.** Αφαιρέθηκε το παλιό, per-tenant `AuthGateDialog` flow από το `Header.jsx`.
+3. **Νέο, γενικό "Concerto"-branded login dialog** (όχι tenant-branded) — το παλιό `AuthGateDialog.jsx` **μένει στον φάκελο, αλλά αποσυνδεδεμένο** από παντού· θα δούμε στην πορεία αν ξαναχρησιμοποιηθεί ή αν διαγραφεί.
+4. **Περιεχόμενο bar προς το παρόν: μόνο wordmark + login/avatar.** Καμία πλοήγηση ακόμα.
+
+### Σημαντικό εύρημα κατά την υλοποίηση (διάβασα το Header.jsx πριν το αγγίξω, όχι από μνήμη)
+Το "login trigger" δεν ήταν ένα απομονωμένο κουμπί — ήταν συνδεδεμένο σε **δύο** σημεία: το `handleFollowClick` (το κουμπί "Ακολούθησε"/"Σύνδεση" κάτω από το λογότυπο tenant) και το `requireAuth`/`onRequireAuth` (περνιέται μέσω `Outlet context` σε child routes, π.χ. πιθανό "πρόσθεσε στο καλάθι" όταν δεν είσαι συνδεδεμένος). Και τα δύο άνοιγαν το ίδιο τοπικό `AuthGateDialog`. Ο χρήστης το επιβεβαίωσε ρητά: να αποσυνδεθεί από **όλα** τα σημεία ενεργοποίησης, "θα δούμε στην πορεία". Άρα και τα δύο έγιναν προσωρινά no-op, με σχόλιο στον κώδικα.
+
+**⚠️ Γνωστό, αποδεκτό, προσωρινό UX κενό:** ένας μη-συνδεδεμένος fan που πατάει "Ακολούθησε" ή κάνει κάτι που χρειάζεται login **δεν παίρνει πια τοπικό popup εκεί που βρίσκεται** — πρέπει πρώτα να ανέβει στο global bar και να συνδεθεί από εκεί. Ρητά αποδεκτό ρίσκο για τώρα, όχι λάθος.
+
+### Νέα αρχεία
+- **`src/components/Concerto/ConcertoBar.jsx`** — το ίδιο το bar. `bg-gray-900`, wordmark "Concerto" αριστερά, δεξιά: avatar (`user_metadata.avatar_url`, fallback `UserCircleIcon` από `@heroicons/react` — ίδια βιβλιοθήκη με το γειτονικό Header.jsx/TenantTopBar.jsx, για συνέπεια) αν συνδεδεμένος, αλλιώς κουμπί "Σύνδεση". Το avatar εδώ είναι **μόνο ένδειξη, όχι dropdown** — η διαχείριση λογαριασμού (αποσύνδεση/διαγραφή) μένει αποκλειστικά στο υπάρχον `TenantTopBar` κάθε tenant, καμία διπλή λειτουργικότητα.
+- **`src/components/Concerto/ConcertoAuthDialog.jsx`** — ίδια δομή/components (`Dialog`+`Card`) με το παλιό `AuthGateDialog.jsx`, ίδιο Google sign-in call, αλλά χωρίς tenant-specific props (λογότυπο/cover/όνομα) — γενικό "Concerto" branding.
+
+### Αλλαγές σε υπάρχοντα αρχεία
+- **`src/App.jsx`** — `<ConcertoBar />` προστέθηκε ως sibling **πριν** το tenant `<div>` (άρα πάντα πάνω από το `<Header>`, εκτός tenant-branded background).
+- **`src/components/Header/Header.jsx`** — αφαιρέθηκε το `import AuthGateDialog`, το `authGateOpen` state, το `<AuthGateDialog />` render. Το `handleFollowClick`/`requireAuth` έγιναν no-op (με σχόλιο). Το follow παραμένει αυτόματο μέσω `useFanSession` μόλις ο fan συνδεθεί.
+
+### Καθαρισμός (βρέθηκε κατά τη δουλειά, όχι ζητηθέν αρχικά)
+Βρέθηκε ένα **ξεχασμένο, ημιτελές `src/components/NavBar/NavBar.jsx`** (18/8, ποτέ δεν έγινε route/import πουθενά — επιβεβαιωμένο με grep) — ίδιο concept με το σημερινό bar, αλλά με `@headlessui/react`/`@heroicons/react` Dialog/hamburger-menu πλήρες πλέγμα (άχρηστο πλέον). **Διαγράφηκε** (νεκρός κώδικας, θα μπέρδευε μελλοντικό reader με δύο "NavBar" concepts). Bonus: το `@headlessui/react` ήταν το **μοναδικό** σημείο χρήσης του σε ολόκληρο το src (επιβεβαιωμένο με grep) — τώρα εντελώς αχρησιμοποίητο dependency· θα μπορούσε να αφαιρεθεί από το `package.json` σαν ξεχωριστό, μη-επείγον chore (δεν το άγγιξα).
+
+### Ανοιχτές, δηλωμένες υποθέσεις (να επιβεβαιωθούν/αλλάξουν αν χρειάζεται)
+- Το bar **δεν** είναι `sticky`/`fixed` — απλό, στατικό block στην κορυφή της σελίδας. Εύκολο να αλλάξει αν θέλει ο χρήστης πάντα-ορατό.
+- Δεν υπάρχει ακόμα dedicated "Concerto" logo asset — text wordmark προς το παρόν.
+
+### Verification
+- `npx eslint` — καθαρό (πιάστηκε και διορθώθηκε ένα ορφανό `useState` import στο Header.jsx μετά την αφαίρεση του `authGateOpen`).
+- `npm run build` — περνάει καθαρό.
+- **⚠️ ΔΕΝ έχει γίνει browser verification** — κρίσιμο εδώ: login flow + follow flow + avatar εμφάνιση, σε τουλάχιστον 2 tenants.
+- **Δεν έγινε commit.**
+
+---
+
+## ConcertoBar — round 2 (ίδια μέρα, 7/9): global avatar/account menu + auto-follow-all + global login από favorite/καλάθι/εισιτήριο
+
+Τρία ξεχωριστά, ρητά ζητηθέντα αλλαγές, μαζί σε ένα πέρασμα:
+
+### 1. Το account menu έγινε global-only
+Το `TenantTopBar.jsx` (ανά tenant) είχε `DropdownMenu` πάνω στο avatar (Διαγραφή λογαριασμού/Αποσύνδεση, βλ. προηγούμενο session). Αφαιρέθηκε εντελώς — έμεινε **σκέτο `<img>`**, καμία λειτουργικότητα. Το `DeleteAccountDialog.jsx` μετακόμισε (`git mv`) από `Header/` σε `Concerto/` (δεν είχε καμία tenant-specific εξάρτηση — καθαρά global concern). Το `ConcertoBar.jsx` απέκτησε το ΙΔΙΟ `DropdownMenu` (Προφίλ/Παραγγελίες "σύντομα", Διαγραφή λογαριασμού, Αποσύνδεση) — ένα σημείο διαχείρισης λογαριασμού για όλη την πλατφόρμα, αντί για ένα ξεχωριστό dropdown ανά tenant. Το `Header.jsx` δεν περνάει πια `onSignOut` στο `TenantTopBar` (άχρηστο πλέον) — αφαιρέθηκε και το πλέον-αχρησιμοποίητο `import { supabase }` από εκεί.
+
+### 2. Auto-follow-all-tenants στο login ("για αρχή", ρητά προσωρινό)
+Νέο `src/queries/useFollowAllTenants.js` — καλείται από το `ConcertoBar` μόλις υπάρχει συνδεδεμένος fan (`isLoggedIn ? user : null`). Κάνει δικό του `fans` upsert (ανεξάρτητο από το `useFanSession` του τρέχοντος tenant — τα δύο τρέχουν παράλληλα, δεν υποθέτει σειρά εκτέλεσης) και μετά upsert `tenant_follows` για **ΟΛΑ** τα rows του `tenants` table σε ένα batch (`onConflict: "fan_id,tenant_id", ignoreDuplicates: true`, ίδιο μοτίβο ασφάλειας/idempotency με το υπάρχον). Ίδιο `23503` zombie-session self-heal με το `useFanSession.js`, για συνέπεια.
+
+**Ρητά δηλωμένο ως πρόχειρη, προσωρινή λογική** — ο χρήστης το περιέγραψε ο ίδιος ως "για αρχή", με σαφή πρόθεση να ξαναδουλευτεί αργότερα (π.χ. πιο έξυπνο discovery/opt-in ανά tenant αντί για blanket follow-all). Δεν είναι λάθος/παράλειψη, είναι σκόπιμη απλοποίηση v1.
+
+### 3. Global login trigger από favorite/καλάθι/εισιτήριο
+Το `onRequireAuth` (Outlet context, ήδη καλείται από `ProductList.jsx` [favorite σε προϊόν], `ProductQuickShop.jsx` [προσθήκη στο καλάθι], `TicketDialog.jsx` [επιλογή εισιτηρίου] — επιβεβαιώθηκε με grep, όχι υπόθεση) ήταν no-op από το προηγούμενο πέρασμα σήμερα. Τώρα:
+- Το `authOpen`/`setAuthOpen` state **ανέβηκε (lifted) στο `App.jsx`** — έπρεπε να είναι προσβάσιμο και από το `ConcertoBar` (δικό του κουμπί "Σύνδεση") και από το `Header`/child routes (favorite/καλάθι/εισιτήριο), άρα δεν μπορούσε να μείνει τοπικό σε κανένα από τα δύο.
+- `App.jsx` περνάει `onRequireAuth={() => setAuthOpen(true)}` στο `Header`, και `authOpen`/`onAuthOpenChange` στο `ConcertoBar` (το οποίο συνεχίζει να renders το `ConcertoAuthDialog`).
+- `Header.jsx` χρησιμοποιεί το ίδιο `onRequireAuth` prop και για το `handleFollowClick` (το κουμπί "Ακολούθησε" όταν δεν είσαι συνδεδεμένος) και το περνάει κατευθείαν στο Outlet context (`onRequireAuth,` shorthand, όχι πια ξεχωριστή τοπική `requireAuth` function).
+
+**Αποτέλεσμα:** favorite σε προϊόν / προσθήκη στο καλάθι / επιλογή εισιτηρίου / "Ακολούθησε", όλα ανοίγουν πλέον το ΙΔΙΟ global `ConcertoAuthDialog`, από όπου κι αν βρίσκεται ο fan.
+
+### Verification
+- `npx eslint` — καθαρό.
+- `npm run build` — καθαρό.
+- **⚠️ ΔΕΝ έχει γίνει browser verification.** Ειδικά εδώ χρειάζεται πραγματικό τεστ: favorite/καλάθι/εισιτήριο ενώ αποσυνδεδεμένος ανοίγουν το σωστό dialog· μετά το login, ελέγχεται ότι το `tenant_follows` γέμισε για ΟΛΑ τα tenants (όχι μόνο το τρέχον)· το global avatar δείχνει σωστά menu, ενώ το per-tenant avatar είναι πλέον απλά εικόνα.
+- **Δεν έγινε commit.**
+
+---
+
+## Bug: 401 στο `fans` upsert μετά το cookie SSO — μερικώς διερευνήθηκε (ίδια μέρα, 7/9)
+
+Ο χρήστης ανέφερε επαναλαμβανόμενα `401 Unauthorized` στο `POST .../rest/v1/fans?on_conflict=id` (13 φορές στο console, ίδιο request). Δοκίμασα να ανοίξω τα δύο γνωστά subdomains (`villagers.concerto.gr`, `athensrock.concerto.gr`) με το built-in browser για να το δω live — **και τα δύο navigation attempts απέτυχαν/denied**, άγνωστο γιατί (ξεχωριστό, πιθανό θέμα με το ίδιο το browser tool, όχι με το site). Άρα η παρακάτω διάγνωση είναι **βασισμένη σε code review + node experiments, ΟΧΙ σε live επιβεβαίωση** — σημειώνεται ρητά.
+
+### Πραγματικό bug που βρέθηκε (και διορθώθηκε) στο `cookieStorage.js`
+Το `setItem`'s chunking decision μετρούσε το **raw** `value.length` (JS string, πριν το `encodeURIComponent`) για να αποφασίσει αν χρειάζεται chunking και πού να κόψει. Λάθος: σημεία στίξης JSON (`"`, `{`, `}`, `:`, `,`) γίνονται 3 χαρακτήρες το καθένα μετά encoding, και ένας ελληνικός χαρακτήρας (π.χ. στο `full_name`/`name` από Google OAuth — το Concerto είναι ελληνική πλατφόρμα, θα συμβαίνει συχνά) γίνεται 6-9 χαρακτήρες. Ένα raw session JSON "μικρό" σε μήκος μπορεί εύκολα να ξεπεράσει το πραγματικό όριο cookie (~4093 bytes) μετά την κωδικοποίηση, χωρίς να το καταλάβει ο παλιός κώδικας — αθόρυβη αποκοπή/απόρριψη cookie από το browser, πιθανή αλλοίωση session.
+
+**Διόρθωση:** νέα `chunkByEncodedLength()` — μετράει το encoded μήκος χαρακτήρα-χαρακτήρα (raw iteration, όχι πάνω στο ήδη-encoded string, ώστε να μην κόβεται ποτέ στη μέση μια πολυ-byte `%XX` ακολουθία) και κόβει chunk μόλις το ΚΩΔΙΚΟΠΟΙΗΜΕΝΟ μήκος πλησιάσει το `CHUNK_SIZE`. Επαληθεύτηκε με node script (όχι μόνο "φαίνεται σωστό"): συνθετικό session με ελληνικά ονόματα ακριβώς στα σύνορα chunk boundary → 12 chunks, όλα κάτω από το όριο μετά encoding, πλήρες round-trip (store→read) επιστρέφει byte-for-byte το ίδιο JSON, `JSON.parse` περνάει καθαρά.
+
+**⚠️ Ειλικρινές setting expectations:** δοκίμασα να αναπαράξω ρεαλιστικό Supabase session JSON (με ελληνικό όνομα, διπλασιασμένο στο `identities[].identity_data` όπως πραγματικά κάνει το Supabase) και ΔΕΝ ξεπέρασε το όριο (2373 raw → 3423 encoded, κάτω από 4093). Άρα αυτό το bug είναι **πραγματικό και σωστά διορθωμένο**, αλλά δεν είναι σίγουρο ότι είναι **η** αιτία του συγκεκριμένου 401 που είδε ο χρήστης — μπορεί να χρειάζεται μεγαλύτερο session (μεγαλύτερο avatar URL, μεγαλύτερο refresh token) για να το πυροδοτήσει.
+
+### Εναλλακτική, πιθανώς πιο πιθανή εξήγηση
+Τίποτα από τη σημερινή δουλειά δεν έχει γίνει commit/deploy — ο χρήστης δοκιμάζει σε `npm run dev` (localhost). Μόλις άλλαξε ο μηχανισμός αποθήκευσης session (localStorage → cookie), ένα **παλιό, ήδη-συνδεδεμένο tab/browser profile** θα έχει μπερδεμένη κατάσταση (παλιό localStorage session + κενό/νέο cookie) στο πρώτο test μετά την αλλαγή — ίδιο genre προβλήματος με το "existing sessions don't migrate" που είχε ήδη σημειωθεί όταν χτίστηκε το cookie SSO.
+
+### Ζητήθηκε από τον χρήστη (εκκρεμεί απάντηση)
+1. Καθάρισμα **και** cookies **και** localStorage για το domain (DevTools → Application), hard refresh, καθαρό sign-in — αν φύγει το 401, ήταν μπερδεμένη παλιά κατάσταση, όχι bug.
+2. Αν επιμένει: paste του `document.cookie` από το console, να φανεί το πραγματικό μέγεθος/αριθμός chunks του αποθηκευμένου session.
+
+### Verification
+- Το chunking fix: node-verified (raw+encoded length experiments, round-trip test).
+- `npx eslint` / `npm run build` — καθαρά.
+- **Δεν έγινε commit.**
+
+### Update: πλήρες live browser verification (Claude in Chrome, ίδια μέρα)
+Το `villagers.concerto.gr`/`athensrock.concerto.gr` δεν έχουν κανένα πραγματικό DNS/deploy ακόμα — δουλεύουν μόνο τοπικά μέσω `/etc/hosts` → Vite dev server (`:5173`). Γι' αυτό απέτυχαν όλα τα προηγούμενα browser attempts (δοκίμαζαν το γυμνό domain, όχι `:5173`). Με τη σωστή διεύθυνση (`http://villagers.concerto.gr:5173/...`), το Claude in Chrome μπήκε κανονικά και έγινε πραγματικό τεστ:
+
+- **Το 401 δεν αναπαράχθηκε.** Σε φρέσκο page load, 4/4 `fans` upserts → `200`. Η αποθηκευμένη cookie session (2 chunks, 3718+642 bytes encoded) reconstruct-άρεται σε valid JSON, `access_token` μη ληγμένο. Πιθανότερη εξήγηση του αρχικού 401: μπερδεμένη state από πριν το cookieStorage fix (η δεύτερη, "εναλλακτική εξήγηση" παραπάνω), όχι το chunking bug καθαυτό — αλλά το chunking fix παραμένει σωστό/χρήσιμο ούτως ή άλλως.
+- **Follow-all λειτουργεί**: 2× `tenant_follows` batch insert (`&columns=...` — το batch upsert του `useFollowAllTenants`) + 2× μονό (`useFanSession`, τρέχον tenant), όλα `201`.
+- **Global avatar/menu**: δουλεύει σωστά (Ο λογαριασμός μου / Προφίλ / Παραγγελίες / Διαγραφή λογαριασμού / Αποσύνδεση) — screenshot επιβεβαιωμένο.
+- **Per-tenant avatar**: click δεν κάνει τίποτα (σκέτη εικόνα, όπως ζητήθηκε) — επιβεβαιωμένο.
+- **Global login trigger από favorite**: αποσυνδέθηκα (μέσω global avatar → Αποσύνδεση), πήγα σε `/merch/category/music`, click στο heart ενός προϊόντος → άνοιξε το `ConcertoAuthDialog` ("Σύνδεση — Γίνε μέλος της οικογένειας Concerto — Συνέχεια με Google") — επιβεβαιωμένο, screenshot.
+- Σημείωση, όχι bug: 4 (όχι 2) requests στο `fans` σε ένα mount — πιθανό React StrictMode double-invoke σε dev (`useFanSession` + `useFollowAllTenants`, ο καθένας ×2). Ακίνδυνο (idempotent upserts), αλλά αξίζει σημείωση για μελλοντικό caching/έλεγχο αν ενοχλήσει.
+
+**Δεν επιβεβαιώθηκε ακόμα:** favorite/καλάθι/εισιτήριο ΜΕΤΑ από επιτυχές sign-in (ότι η ενέργεια συνεχίζει κανονικά, όχι μόνο ότι ανοίγει το dialog) — TicketDialog συγκεκριμένα δεν δοκιμάστηκε καθόλου σήμερα.
+- **Δεν έγινε commit.**
+
+---
 
 ---
 

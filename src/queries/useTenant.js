@@ -12,7 +12,8 @@ export function useTenant(domain) {
           tenants (
             id,
             name,
-            slug
+            slug,
+            type
           )
         `)
         .eq('domain', domain)

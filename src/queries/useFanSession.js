@@ -14,7 +14,19 @@ export function useFanSession(user, tenantId) {
         },
         { onConflict: "id" }
       )
-      if (fanError) throw fanError
+      if (fanError) {
+        // 23503 = foreign key violation: το auth.users row αυτού του session
+        // δεν υπάρχει πια (π.χ. ο λογαριασμός διαγράφηκε από άλλο subdomain/
+        // tab — κάθε subdomain έχει δικό του, ξεχωριστό localStorage session,
+        // βλ. concerto-brief.md). Το session εδώ είναι "ζόμπι": ζωντανό
+        // τοπικά, νεκρό στον server. scope:"local" καθαρίζει μόνο το τοπικό
+        // storage — δεν χρειάζεται/δεν έχει νόημα server call, ο server δεν
+        // έχει πια τίποτα να ακυρώσει γι' αυτό το session.
+        if (fanError.code === "23503") {
+          await supabase.auth.signOut({ scope: "local" })
+        }
+        throw fanError
+      }
 
       const { error: followError } = await supabase.from("tenant_follows").upsert(
         { fan_id: user.id, tenant_id: tenantId },

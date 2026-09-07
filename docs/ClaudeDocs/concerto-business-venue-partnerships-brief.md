@@ -165,6 +165,9 @@ create table event_listings (
 - Λίστα ερωτήσεων προς τον venue/manager για την προσωπική συνάντηση (επόμενο βήμα)
 - Πραγματικό wildcard DNS/SSL setup (`concerto.gr` αγορά + ρύθμιση) — δεν έχει δοκιμαστεί ακόμα στην πράξη
 - Ρητό checklist "πρόσθεσε νέο tenant domain στο Google OAuth Console" — να μπει στο μελλοντικό Tenant Admin Dashboard onboarding flow
+- **`concertofamily.gr` redirect bridge (custom domains)** — παραμένει ρητά αναβεβλημένο, ΟΧΙ πριν το launch, όπως αποφασίστηκε.
+
+**✅ Υλοποιήθηκε (7/9):** Το "δωρεάν" SSO μέσα στην οικογένεια (shared cookie, `Domain=.concerto.gr`) που περιγράφεται παραπάνω ως πλεονέκτημα του subdomain μοντέλου — υλοποιήθηκε πραγματικά (`src/lib/cookieStorage.js`, βλ. `concerto-react-router-brief.md`). Αντικατέστησε το προεπιλεγμένο, per-origin `localStorage` του Supabase client, το οποίο ήταν η ρίζα ενός πραγματικού "zombie session" bug ανάμεσα σε subdomains. **Δεν** χρειάστηκε το `concertofamily.gr` bridge — αφορά αποκλειστικά τα ήδη-υπάρχοντα `*.concerto.gr` subdomains, όπως ακριβώς προβλεπόταν εδώ. Εκκρεμεί ακόμα browser verification (βλ. `concerto-react-router-brief.md`).
 
 ## Εξαρτήσεις από το κύριο technical brief
 Αν προχωρήσει η Επιλογή Β στο μέλλον, θα χρειαστεί συντονισμός με: το ήδη προγραμματισμένο Checkout/reservation flow (θα πρέπει να σχεδιαστεί από την αρχή με πολλαπλούς payees υπόψη, αν αποφασιστεί να υποστηριχθεί αργότερα), και πιθανόν με το Tenant Admin Dashboard (νέος τύπος tenant: venue/promoter, όχι μόνο artist). Το μελλοντικό SSO bridge (`concertofamily.gr`) θα χρειαστεί επίσης συντονισμό με το ήδη υπάρχον fan authentication σύστημα (`useAuth.js`, `useFanSession.js`) όταν έρθει η ώρα του.

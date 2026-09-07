@@ -294,6 +294,23 @@ slug (νέο, 6/9 — text, NOT NULL, UNIQUE ανά tenant_id, auto-generated α
 
 > **Μελλοντικό:** Μεγέθη ρούχων (S/M/L/XL) με ξεχωριστό stock ανά μέγεθος — θα χρειαστεί νέο table `product_variants`. Δεν έχει σχεδιαστεί ακόμα. Το `ProductQuickview` ήδη δείχνει color/size ως **static/disabled placeholder** μόνο για category `clothing`, έτοιμο οπτικά για όταν φτιαχτούν τα variants.
 
+### `band_members` (νέο, 6/9)
+```
+id (uuid, PK), tenant_id (FK), name, role, image_url, sort_order,
+is_active (default true), created_at
+```
+Λίστα μελών μπάντας (όνομα + ρόλος/όργανο + φωτογραφία) για το section "Τα
+μέλη μας" στο `/about`. **Καθαρά data-driven rendering** — ΔΕΝ υπάρχει πεδίο
+"type" στο `tenants` για να ξεχωρίζει band από venue· απλά ένα venue tenant
+δεν θα έχει ποτέ rows εδώ, οπότε το section δεν εμφανίζεται καθόλου γι' αυτό
+(απόφαση με τον χρήστη, βλ. `concerto-band-members-brief.md` αν χρειαστεί
+αναλυτικό log — προς το παρόν τεκμηριωμένο μόνο εδώ). RLS: public read μόνο
+στα `is_active = true` rows, καμία write policy ακόμα (ίδιο pattern με
+products/events, θα προστεθεί μαζί με το Tenant Admin Dashboard). Frontend:
+`src/components/BandInfo/BandMembers.jsx` (UI πιστό σε Tailwind Plus
+reference "Meet our leadership"), `src/queries/useBandMembers.js`,
+renders μέσα στο `InfoRoute.jsx` κάτω από το υπάρχον `BandInfo`.
+
 ### `favorites` (schema έτοιμο, ΔΕΝ είναι ακόμα λειτουργικό)
 ```sql
 create table favorites (
@@ -467,10 +484,11 @@ values (
 ⏳ Product variants (μεγέθη ρούχων S/M/L/XL) — δεν έχει σχεδιαστεί· το ProductQuickShop έχει ήδη λειτουργικό size-picker UI, αλλά χωρίς πραγματικό stock ανά μέγεθος από πίσω
 ✅ Database indexing — **ΟΛΟΚΛΗΡΩΘΗΚΕ.** Indexes σε όλα τα foreign keys (events, tickets, products, tenant_domains, tenant_settings, tenant_follows, favorites, cart_items).
 ✅ RLS audit πλήρους βάσης — **ΟΛΟΚΛΗΡΩΘΗΚΕ.** Όλα τα 10 tables επιβεβαιωμένα με ενεργό RLS (`rowsecurity = true`) + έλεγχος όλων των policies. Αποτέλεσμα: καμία πραγματική τρύπα ασφαλείας. Δύο μικρά, αναμενόμενα κενά εντοπίστηκαν: (α) καμία write policy στα "δημόσια" tables (events/products/tickets/tenants/tenant_settings/tenant_domains) — αναμενόμενο, θα προστεθούν μαζί με το Tenant Admin Dashboard· (β) έλειπε DELETE policy στο `tenant_follows` (unfollow) — **διορθώθηκε άμεσα**, προστέθηκε το policy (δεν υπάρχει ακόμα UI κουμπί "unfollow", μόνο η δυνατότητα σε επίπεδο βάσης).
-✅ **React Router (routing) — ΟΛΟΚΛΗΡΩΘΗΚΕ, Σάββατο 5/9 → Κυριακή 6/9.** Merch, Events, home tab σε `/about`, 404 handling, cards ως πραγματικά `<Link>`, slug migration (με 2 bugfixes), EventInfoDialog ως route (με 1 bugfix), και **πλήρες αυτόματο browser testing** (cross-tenant isolation, mobile viewport, back-button, logged-out auth-gate behavior) — όλα browser-confirmed μέσω Claude in Chrome. **Εκκρεμεί μόνο**: commit/push της σημερινής δουλειάς. Λεπτομερές, ζωντανό log στο `concerto-react-router-brief.md`.
+✅ **React Router (routing) — ΟΛΟΚΛΗΡΩΘΗΚΕ και COMMITTED/PUSHED, Σάββατο 5/9 → Κυριακή 6/9.** Merch, Events, home tab σε `/about`, 404 handling, cards ως πραγματικά `<Link>`, slug migration (με 2 bugfixes), EventInfoDialog ως route (με 1 bugfix), και **πλήρες αυτόματο browser testing** (cross-tenant isolation, mobile viewport, back-button, logged-out auth-gate behavior) — όλα browser-confirmed μέσω Claude in Chrome. Commit `be03c85` έγινε push στο `main` (`a672ce5..be03c85 main -> main`) — **ολόκληρο το task κλειστό, τίποτα δεν εκκρεμεί.** Λεπτομερές, ζωντανό log στο `concerto-react-router-brief.md`.
 ⏳ Cart persistence (νέο `cart_items` table, fan_id-based, όχι tenant-based) — **σκόπιμα σε αναμονή, κατόπιν ρητής επιλογής του χρήστη**, όχι ξεχασμένο.
 ⏳ ProductQuickShop "Πληρωμή" κουμπί — παραμένει placeholder/disabled, σωστά (δεν υπάρχει ακόμα σύστημα πληρωμών)
-⏳ BandInfo component — υπάρχει στη δομή, περιεχόμενο/λειτουργικότητα δεν έχει δουλευτεί ακόμα
+⏳ BandInfo component — hardcoded test-data κείμενο (θα γίνει dynamic αργότερα, ίδιο μοτίβο με band_members). **Νέο, 6/9:** truncate/expand λειτουργικότητα (`line-clamp-[10]` + κουμπί "Περισσότερα"/"Λιγότερα", `useState`) — ο χρήστης το ενέκρινε ως σχεδόν τελικό, **ρητά αναβεβλημένο για styling polish πριν το launch της πρώτης έκδοσης** (δική του απόφαση, όχι ξεχασμένο item).
+✅ **BandMembers — ΟΛΟΚΛΗΡΩΘΗΚΕ, Κυριακή 6/9.** Νέο section "Τα μέλη μας" στο `/about`, νέος πίνακας `band_members`, καθαρά data-driven εμφάνιση (χωρίς πεδίο tenant.type — βλ. σχήμα βάσης παραπάνω). **Εκκρεμεί**: ο χρήστης να τρέξει το migration στο Supabase και να προσθέσει δοκιμαστικά μέλη, μετά manual browser check.
 
 ---
 

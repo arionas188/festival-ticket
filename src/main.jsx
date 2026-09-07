@@ -10,7 +10,7 @@ import ProductModalRoute from './components/Merch/ProductModalRoute.jsx'
 import EventsRoute from './components/Events/EventsRoute.jsx'
 import EventModalRoute from './components/Events/EventModalRoute.jsx'
 import EventInfoRoute from './components/Events/EventInfoRoute.jsx'
-import InfoRoute from './components/BandInfo/InfoRoute.jsx'
+import InfoRoute from './components/About/InfoRoute.jsx'
 import ErrorPage from './components/ErrorPage/ErrorPage.jsx'
 
 const queryClient = new QueryClient()

@@ -1,21 +1,17 @@
 import { useState } from "react"
 import { HeartIcon, ShoppingCartIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import TenantSearchDialog from "./TenantSearchDialog"
 import FavoritesDialog from "../Merch/FavoritesDialog"
 import CartDialog from "../Merch/CartDialog"
 import { useCart } from "../../queries/useCart"
 import { useFavorites } from "../../queries/useFavorites"
 
-export default function TenantTopBar({ fanAvatarUrl, onSignOut, tenantId, fanId, onQuickBuy }) {
+// Το avatar εδώ είναι πλέον καθαρά ένδειξη ("είσαι συνδεδεμένος") — καμία
+// δική του λειτουργικότητα/menu πια. Η διαχείριση λογαριασμού (αποσύνδεση/
+// διαγραφή) μετακόμισε στο global avatar, ένα σημείο για όλους τους
+// tenants αντί για ξεχωριστό dropdown σε καθέναν — βλ.
+// src/components/Concerto/ConcertoBar.jsx, concerto-react-router-brief.md.
+export default function TenantTopBar({ fanAvatarUrl, tenantId, fanId, onQuickBuy }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [favoritesOpen, setFavoritesOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
@@ -26,26 +22,11 @@ export default function TenantTopBar({ fanAvatarUrl, onSignOut, tenantId, fanId,
   return (
     <>
       <div className="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button">
-              <img
-                alt="Το προφίλ σου"
-                src={fanAvatarUrl}
-                className="size-9 rounded-full object-cover ring-2 ring-white"
-              />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Ο λογαριασμός μου</DropdownMenuLabel>
-              <DropdownMenuItem disabled>Προφίλ (σύντομα)</DropdownMenuItem>
-              <DropdownMenuItem disabled>Παραγγελίες μου (σύντομα)</DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onSignOut}>Αποσύνδεση</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <img
+          alt="Το προφίλ σου"
+          src={fanAvatarUrl}
+          className="size-9 rounded-full object-cover ring-2 ring-white"
+        />
 
         <div className="ml-auto flex items-center gap-2">
           <button
@@ -94,7 +75,7 @@ export default function TenantTopBar({ fanAvatarUrl, onSignOut, tenantId, fanId,
         onQuickBuy={onQuickBuy}
       />
 
-<CartDialog open={cartOpen} onOpenChange={setCartOpen} fanId={fanId} /> 
-   </>
+      <CartDialog open={cartOpen} onOpenChange={setCartOpen} fanId={fanId} />
+    </>
   )
 }

@@ -111,3 +111,12 @@ using (
 ## Οδηγία προς AI assistant (Claude ή άλλο)
 
 > Αυτό είναι ξεχωριστό, ανεξάρτητο σύστημα από το fan-facing κομμάτι του Concerto. Μην ανακατεύεις τη λογική/tables του tenant admin auth με αυτή των fans. **✅ Ήδη αποφασισμένο, μην ξαναρωτήσεις:** ένας admin/manager ΜΠΟΡΕΙ να διαχειρίζεται πολλαπλούς tenants (many-to-many `tenant_admins`, βλ. σημείο 1 παραπάνω). Πριν προχωρήσεις σε υλοποίηση, επιβεβαίωσε μόνο: ποιος μηχανισμός auth θα χρησιμοποιηθεί (email/password vs Google OAuth ξεχωριστό flow) — αυτό παραμένει ανοιχτό.
+
+### ⚠️ TODO (σημειώθηκε 7/9, σχετίζεται με το νέο tenant creation flow): `tenants.slug` χωρίς `NOT NULL` + `UNIQUE`
+
+Το `tenants.slug` είναι σήμερα `nullable`, default `''` — η βάση δεν εγγυάται μοναδικό, μη-κενό slug ανά tenant. Δεν είναι κρίσιμο τώρα (το production domain routing περνάει από `tenant_domains.domain`, ανεξάρτητο από αυτό το πεδίο), αλλά όταν φτιαχτεί η φόρμα δημιουργίας νέου tenant σε αυτό το Dashboard, να προστεθεί:
+```sql
+alter table tenants alter column slug set not null;
+alter table tenants add constraint tenants_slug_unique unique (slug);
+```
+ώστε η βάση να προστατεύει από κενό/διπλό slug αντί να το εμπιστευόμαστε χειροκίνητα.
