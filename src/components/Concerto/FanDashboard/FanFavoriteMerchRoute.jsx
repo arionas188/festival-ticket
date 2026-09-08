@@ -1,0 +1,57 @@
+import { useOutletContext } from "react-router-dom"
+import { useFanFavoriteMerch } from "../../../queries/useFanFavoriteMerch"
+
+export default function FanFavoriteMerchRoute() {
+  const { fanId } = useOutletContext()
+  const { data: items = [], isLoading } = useFanFavoriteMerch(fanId)
+
+  if (isLoading) return <p className="text-sm text-gray-500">Φόρτωση...</p>
+
+  return (
+    <div>
+      <h1 className="text-lg font-semibold text-gray-900">Αγαπημένα merch</h1>
+
+      {items.length === 0 ? (
+        <p className="mt-4 text-sm text-gray-500">Δεν έχεις αγαπημένα προϊόντα ακόμα.</p>
+      ) : (
+        <ul role="list" className="mt-6 divide-y divide-gray-100">
+          {items.map((item) => (
+            <li key={item.productId} className="flex items-center gap-4 py-4">
+              <img
+                alt=""
+                src={item.imageUrl}
+                className="size-14 shrink-0 rounded-md object-cover ring-1 ring-gray-200"
+              />
+              <div className="min-w-0 flex-1">
+                {item.domain ? (
+                  // Πλήρες, cross-origin href — το προϊόν ζει στο subdomain
+                  // του δικού του tenant, όχι εδώ. Δέχεται UUID (βλ.
+                  // ProductModalRoute.jsx), δεν χρειάζεται slug.
+                  <a
+                    href={`//${item.domain}/merch/product/${item.productId}`}
+                    className="truncate text-sm font-semibold text-gray-900 hover:underline"
+                  >
+                    {item.name}
+                  </a>
+                ) : (
+                  <span className="truncate text-sm font-semibold text-gray-900">
+                    {item.name}
+                  </span>
+                )}
+                <p className="text-xs text-gray-500">{item.tenantName}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <p className="text-sm text-gray-700">{Number(item.price).toFixed(2)}€</p>
+                  {item.priceDropped && (
+                    <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 inset-ring inset-ring-red-600/20">
+                      Έπεσε από {Number(item.priceAtFavorite).toFixed(2)}€
+                    </span>
+                  )}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}

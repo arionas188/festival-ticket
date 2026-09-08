@@ -455,6 +455,9 @@ values (
 
 **Σημείωση για το μέλλον:** Αυτό είναι προσωρινή λύση δοκιμής. Όταν υπάρξουν πραγματικά custom domains (π.χ. `villagersband.com`) ή η κεντρική πλατφόρμα `concerto.gr`, θα χρειαστεί πιο συστηματική διαχείριση DNS/domains (πιθανό μελλοντικό task για το Tenant Admin Dashboard: ο tenant να μπορεί να προσθέτει το δικό του domain μόνος του).
 
+### ✅ Δεύτερο tenant (Athens Rock) — ολοκληρώθηκε
+Athens Rock Festival έχει πλέον δικό του domain στο `tenant_domains` και δουλεύει κανονικά, live-verified πολλές φορές κατά τη διάρκεια του React Router/Fan Dashboard work (βλ. `concerto-react-router-brief.md`) — π.χ. cross-tenant favorites/cart isolation test έγινε ακριβώς Villagers ↔ Athens Rock.
+
 ---
 
 ## 📍 ΠΟΥ ΒΡΙΣΚΟΜΑΣΤΕ ΤΩΡΑ (σύνοψη)
@@ -485,6 +488,10 @@ values (
 ✅ Database indexing — **ΟΛΟΚΛΗΡΩΘΗΚΕ.** Indexes σε όλα τα foreign keys (events, tickets, products, tenant_domains, tenant_settings, tenant_follows, favorites, cart_items).
 ✅ RLS audit πλήρους βάσης — **ΟΛΟΚΛΗΡΩΘΗΚΕ.** Όλα τα 10 tables επιβεβαιωμένα με ενεργό RLS (`rowsecurity = true`) + έλεγχος όλων των policies. Αποτέλεσμα: καμία πραγματική τρύπα ασφαλείας. Δύο μικρά, αναμενόμενα κενά εντοπίστηκαν: (α) καμία write policy στα "δημόσια" tables (events/products/tickets/tenants/tenant_settings/tenant_domains) — αναμενόμενο, θα προστεθούν μαζί με το Tenant Admin Dashboard· (β) έλειπε DELETE policy στο `tenant_follows` (unfollow) — **διορθώθηκε άμεσα**, προστέθηκε το policy (δεν υπάρχει ακόμα UI κουμπί "unfollow", μόνο η δυνατότητα σε επίπεδο βάσης).
 ✅ **React Router (routing) — ΟΛΟΚΛΗΡΩΘΗΚΕ και COMMITTED/PUSHED, Σάββατο 5/9 → Κυριακή 6/9.** Merch, Events, home tab σε `/about`, 404 handling, cards ως πραγματικά `<Link>`, slug migration (με 2 bugfixes), EventInfoDialog ως route (με 1 bugfix), και **πλήρες αυτόματο browser testing** (cross-tenant isolation, mobile viewport, back-button, logged-out auth-gate behavior) — όλα browser-confirmed μέσω Claude in Chrome. Commit `be03c85` έγινε push στο `main` (`a672ce5..be03c85 main -> main`) — **ολόκληρο το task κλειστό, τίποτα δεν εκκρεμεί.** Λεπτομερές, ζωντανό log στο `concerto-react-router-brief.md`.
+✅ **Fan Dashboard v1 + Phase 2 — ΟΛΟΚΛΗΡΩΘΗΚΕ, 8/9.** Προφίλ/Αγαπημένα tenants/Αγαπημένα merch (συγκεντρωτικά, price-drop notification)/Αγαπημένα events (συγκεντρωτικά, change notification)/Παραγγελίες (placeholder). Tenant context chip. Πλήρες log στο `concerto-react-router-brief.md`.
+✅ **Bug fix: cross-tenant favorites/cart leakage — ΔΙΟΡΘΩΘΗΚΕ, 8/9, live-verified από τον χρήστη.** `favorites`/`cart_items` δεν είχαν `tenant_id` (global ανά fan αντί για ανά tenant). Προστέθηκε tenant_id + backfill, 6 call sites ενημερώθηκαν. Βλ. `concerto-react-router-brief.md`.
+✅ **Follow/unfollow — επανασχεδιάστηκε, 8/9.** Αφαιρέθηκε το αυτόματο "follow όλα στο login" και το silent auto-follow-on-visit (ρητά ανακλήθηκε προηγούμενη "για αρχή" απόφαση). Follow πλέον ρητή ενέργεια ανά tenant, καμία localStorage μνήμη. Βλ. `concerto-react-router-brief.md`.
+⏳ **FanIdCard — test/demo component, 8/9.** "Ταυτότητα" fan στο Προφίλ (id number πραγματικό, υπόλοιπα πεδία test data προς το παρόν) — για επίδειξη, μελλοντική επιχειρηματική χρήση. 2 migrations εκκρεμούν. Βλ. `concerto-react-router-brief.md`.
 ⏳ Cart persistence (νέο `cart_items` table, fan_id-based, όχι tenant-based) — **σκόπιμα σε αναμονή, κατόπιν ρητής επιλογής του χρήστη**, όχι ξεχασμένο.
 ⏳ ProductQuickShop "Πληρωμή" κουμπί — παραμένει placeholder/disabled, σωστά (δεν υπάρχει ακόμα σύστημα πληρωμών)
 ⏳ BandInfo component — hardcoded test-data κείμενο (θα γίνει dynamic αργότερα, ίδιο μοτίβο με band_members). **Νέο, 6/9:** truncate/expand λειτουργικότητα (`line-clamp-[10]` + κουμπί "Περισσότερα"/"Λιγότερα", `useState`) — ο χρήστης το ενέκρινε ως σχεδόν τελικό, **ρητά αναβεβλημένο για styling polish πριν το launch της πρώτης έκδοσης** (δική του απόφαση, όχι ξεχασμένο item).

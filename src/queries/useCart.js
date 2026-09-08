@@ -1,21 +1,28 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "../lib/supabase"
 
-export function useCart(fanId) {
+// BUG FIX (8/9): tenantId προστέθηκε — πριν ήταν scoped μόνο ανά fan_id,
+// οπότε το καλάθι ΕΝΟΣ tenant "διέρρεε" σε ΟΛΟΥΣ (live-επιβεβαιωμένο, το
+// CartDialog έδειχνε κυριολεκτικά προϊόντα άλλου tenant). Βλ. migration
+// 20260908130000. Δεν υπάρχει global/συγκεντρωτικό καλάθι στο Fan
+// Dashboard — το "quick cart" είναι εξ ορισμού πράξη πάνω σε ΕΝΑ tenant
+// (πληρωμή γίνεται ανά tenant, όχι συγκεντρωτικά).
+export function useCart(fanId, tenantId) {
   const queryClient = useQueryClient()
 
   const query = useQuery({
-    queryKey: ["cart", fanId],
+    queryKey: ["cart", fanId, tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("cart_items")
         .select("id, quantity, product:products(*)")
         .eq("fan_id", fanId)
+        .eq("tenant_id", tenantId)
 
       if (error) throw error
       return data
     },
-    enabled: !!fanId,
+    enabled: !!fanId && !!tenantId,
   })
 
   const addItem = useMutation({
@@ -30,7 +37,7 @@ export function useCart(fanId) {
       } else {
         const { error } = await supabase
           .from("cart_items")
-          .insert({ fan_id: fanId, product_id: product.id, quantity })
+          .insert({ fan_id: fanId, product_id: product.id, quantity, tenant_id: tenantId })
         if (error) throw error
       }
     },

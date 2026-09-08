@@ -7,8 +7,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 import ProductGallery from "./ProductGallery"
 
-export default function ProductList({ products, fanId, isLoggedIn, onRequireAuth }) {
-  const { data: favoriteIds = [] } = useFavorites(fanId)
+export default function ProductList({ products, fanId, tenantId, isLoggedIn, onRequireAuth }) {
+  const { data: favoriteIds = [] } = useFavorites(fanId, tenantId)
   const toggleFavorite = useToggleFavorite(fanId)
   const [galleryProduct, setGalleryProduct] = useState(null)
 
@@ -19,7 +19,8 @@ export default function ProductList({ products, fanId, isLoggedIn, onRequireAuth
       return
     }
     const isFavorited = favoriteIds.includes(productId)
-    toggleFavorite.mutate({ productId, isFavorited })
+    const product = products.find((p) => p.id === productId)
+    toggleFavorite.mutate({ productId, isFavorited, price: product?.price, tenantId })
   }
 
   return (

@@ -9,7 +9,7 @@ import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 import { useProducts } from "../../queries/useProducts"
 
 export default function FavoritesDialog({ open, onOpenChange, fanId, tenantId, onQuickBuy }) {
-  const { data: favoriteIds = [] } = useFavorites(fanId)
+  const { data: favoriteIds = [] } = useFavorites(fanId, tenantId)
   const { data: allProducts } = useProducts(tenantId)
   const toggleFavorite = useToggleFavorite(fanId)
 

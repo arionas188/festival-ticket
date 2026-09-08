@@ -1,6 +1,9 @@
 import { InformationCircleIcon, MapPinIcon, TicketIcon } from '@heroicons/react/20/solid'
+import { HeartIcon } from '@heroicons/react/24/outline'
+import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid'
 import { Link } from 'react-router-dom'
 import { getMapsUrl } from '../../lib/maps'
+import { useEventFavorites, useToggleEventFavorite } from '../../queries/useEventFavorites'
 
 function getStatus(event) {
   if (!event.capacity || event.capacity === 0) {
@@ -29,11 +32,29 @@ function formatDateBadge(dateString) {
 // να ανοίγει τοπικό dialog state, ώστε το event modal να έχει δικό του μοιράσιμο
 // URL (ίδιο pattern με το ProductQuickShop στο Merch) — και right-click/"open in
 // new tab" να δουλεύει, όπως και στο CategoryGrid/ProductList.
-export default function EventsList({ events }) {
+// Ίδιο μοτίβο favorite-toggle με το ProductList.jsx (Merch) — καρδούλα πάνω
+// στην εικόνα, solid/outline ανάλογα με την κατάσταση, onRequireAuth αν δεν
+// είσαι συνδεδεμένος. Βλ. useEventFavorites.js/event_favorites migration.
+export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth }) {
+  const { data: favoriteEventIds = [] } = useEventFavorites(fanId)
+  const toggleEventFavorite = useToggleEventFavorite(fanId)
+
+  function handleToggleFavorite(e, event) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isLoggedIn) {
+      onRequireAuth()
+      return
+    }
+    const isFavorited = favoriteEventIds.includes(event.id)
+    toggleEventFavorite.mutate({ eventId: event.id, isFavorited, event })
+  }
+
   return (
     <ul role="list" className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {events.map((event) => {
         const status = getStatus(event)
+        const isFavorited = favoriteEventIds.includes(event.id)
 
         return (
           <li
@@ -41,11 +62,24 @@ export default function EventsList({ events }) {
             className="col-span-1 divide-y divide-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
           >
             {event.image_url && (
-              <img
-                src={event.image_url}
-                alt={event.title}
-                className="h-40 w-full object-cover"
-              />
+              <div className="relative">
+                <img
+                  src={event.image_url}
+                  alt={event.title}
+                  className="h-40 w-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={(e) => handleToggleFavorite(e, event)}
+                  className="absolute top-2 right-2 rounded-full bg-white/80 p-1.5 backdrop-blur-sm hover:bg-white"
+                >
+                  {isFavorited ? (
+                    <HeartIconSolid className="size-5 text-red-500" />
+                  ) : (
+                    <HeartIcon className="size-5 text-gray-700" />
+                  )}
+                </button>
+              </div>
             )}
 
             <div className="flex w-full items-start justify-between space-x-4 p-6">

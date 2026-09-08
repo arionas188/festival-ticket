@@ -9,8 +9,8 @@ import {
 } from "@/components/ui/dialog"
 import { useCart } from "../../queries/useCart"
 
-export default function CartDialog({ open, onOpenChange, fanId }) {
-  const { items, removeItem, updateQuantity, subtotal } = useCart(fanId)
+export default function CartDialog({ open, onOpenChange, fanId, tenantId }) {
+  const { items, removeItem, updateQuantity, subtotal } = useCart(fanId, tenantId)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

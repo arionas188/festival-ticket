@@ -16,7 +16,12 @@ export default function EventsRoute() {
 
   return (
     <div>
-      <EventsList events={events} />
+      <EventsList
+        events={events}
+        fanId={context.fanId}
+        isLoggedIn={context.isLoggedIn}
+        onRequireAuth={context.onRequireAuth}
+      />
       <Outlet context={context} />
     </div>
   )

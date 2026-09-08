@@ -48,6 +48,7 @@ export default function MerchCategoryRoute() {
         <ProductList
           products={sortedItems}
           fanId={context.fanId}
+          tenantId={context.tenantId}
           isLoggedIn={context.isLoggedIn}
           onRequireAuth={context.onRequireAuth}
         />

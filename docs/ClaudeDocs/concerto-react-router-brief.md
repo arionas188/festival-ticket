@@ -479,6 +479,169 @@ POST .../auth/v1/logout?scope=local             403 (Forbidden)  ← ΝΕΟ
 
 ---
 
+---
+
+## Fan Dashboard v1 — υλοποιήθηκε (8/9, νέα μέρα μετά το ConcertoBar/cookie SSO)
+
+### Απόφαση σειράς build (με τον χρήστη)
+Fan Dashboard → Tenant Admin Dashboard → Concerto/platform Admin — ρητή επιλογή χρήστη, βλ. κύριο brief για το three-way split (Concerto admin / generic Tenant Admin / Fan Dashboard).
+
+### Scope v1 (επιβεβαιωμένο με AskUserQuestion)
+- Προφίλ (view/edit)
+- Tenants που ακολουθεί (μετονομάστηκε σε "Αγαπημένα tenants", βλ. Phase 2 παρακάτω)
+- Παραγγελίες (placeholder — δεν υπάρχει καθόλου checkout σύστημα ακόμα)
+
+Ρητή πρόσθετη απαίτηση: κόκκινο badge "1" (ίδιο pattern με favorites/cart) στο avatar/menu item "Προφίλ" όταν τα στοιχεία είναι ακόμα ανεπεξέργαστα από Google — σβήνει ΜΟΝΟ όταν ο fan αποθηκεύσει πραγματική αλλαγή, ΟΧΙ απλά όταν ανοίξει τη σελίδα (ρητή, πιο "αυστηρή" επιλογή του χρήστη).
+
+### Reference component
+Ο χρήστης έδωσε ένα Tailwind Plus dashboard shell (headlessui/heroicons) και ζήτησε ρητά: "ακολούθησε τη δομή, μη σχεδιάσεις μόνος σου". Αναπαράχθηκε με τα ΔΙΚΑ ΜΑΣ primitives (Radix Sheet/DropdownMenu, ήδη εγκατεστημένα — καμία νέα shadcn εγκατάσταση χρειάστηκε), όχι headlessui.
+
+### Νέα αρχεία
+```
+src/queries/syncFanFromAuth.js       → κοινή upsert λογική (fans), βγήκε από useFanSession.js/useFollowAllTenants.js (deduplication)
+src/queries/useFanAccount.js          → useFanAccount(fanId) + useUpdateFanProfile(fanId)
+src/queries/useFanTenants.js          → useFanTenants(fanId) + useUnfollowTenant(fanId), 3-βηματο cross-tenant query (ίδιο στυλ useTenant.js)
+src/components/Header/TenantLayout.jsx           → βγήκε από App.jsx, tenant-branded chrome
+src/components/Concerto/FanDashboard/
+  FanDashboardLayout.jsx    → shell (mobile Sheet drawer + desktop icon-only sidebar), TenantChip
+  FanProfileRoute.jsx       → uncontrolled form (defaultValue+FormData, όχι useState+useEffect — βλ. lint fix παρακάτω)
+  FanTenantsRoute.jsx       → λίστα "Αγαπημένα tenants", cross-origin <a href="//{domain}/about">, Unfollow
+  FanOrdersRoute.jsx        → ρητό placeholder
+```
+`main.jsx`: νέο sibling route `/account` (`FanDashboardLayout`) με children `profile`/`tenants`/`merch`/`events`/`orders` (index redirect σε `profile`).
+
+### 🐛 Lint fix
+`react-hooks/set-state-in-effect` στο `FanProfileRoute.jsx` (`useEffect(() => setFullName(...), [fan])` flagged). Λύση: uncontrolled input (`defaultValue` + `FormData` στο submit) αντί για `useState`+`useEffect` sync.
+
+### 🐛 Bug: "Αποσύνδεση" μέσα στο `/account` άφηνε τον fan κολλημένο σε σπασμένη σελίδα
+Root cause: το Fan Dashboard χρειάζεται fan session, δεν έχει tenant chrome να πέσει πίσω. **Λύση, ρητά προσωρινή "μέχρι να φτιάξουμε το concertofamily.gr"** (εκεί θα ανήκουν όλα τα tenants): `useEffect` guard στο `ConcertoBar.jsx`, redirect σε `/about` (του τρέχοντος tenant subdomain) όποτε logged-out ενώ βρίσκεσαι σε `/account`.
+
+### 🐛 Race condition στο ίδιο fix (self-caught, όχι user-reported)
+Το guard έτρεχε πριν προλάβει να επιβεβαιωθεί το session (`useAuth()` ξεκινάει με `session=undefined`) — false-positive redirect σε ΗΔΗ συνδεδεμένο fan. Live-confirmed screenshot (`/account/tenants` redirect σε `/about` ενώ το avatar έδειχνε ξεκάθαρα logged-in). **Λύση:** πρόσθεσα `authLoading` στο guard condition. Re-verified live.
+
+### Migration
+`20260908100000_add_fans_profile_customized.sql` — `fans.profile_customized boolean default false`.
+
+---
+
+## Fan Dashboard — Phase 2: tenant chip, favorites merch/events συγκεντρωτικά + notifications (ίδια μέρα, 8/9)
+
+### Ζητήθηκε (ένα μεγάλο μήνυμα, verbatim στο chat log)
+1. Tenant context chip πάνω από "Ο λογαριασμός μου" — δείχνει από ποιο tenant άνοιξε το dashboard, click γυρνάει εκεί.
+2. Αγαπημένα tenants (ήδη υπήρχε από v1, polish).
+3. Αγαπημένα merch από ΟΛΟΥΣ τους tenants, συγκεντρωτικά, με notification αν πέσει η τιμή.
+4. Αγαπημένα events από ΟΛΟΥΣ τους tenants, συγκεντρωτικά, με notification αν αλλάξει κάτι.
+5. Παραγγελίες με ολοκληρωμένες/ανολοκλήρωτες — **ΜΠΛΟΚΑΡΙΣΜΕΝΟ, δεν υπάρχει καθόλου checkout σύστημα**, παραμένει placeholder.
+
+Δόθηκε honest scope breakdown + `AskUserQuestion` (multiSelect) — επιλέχθηκαν: chip+tenant favorites polish, merch favorites+price-drop, event favorites από μηδέν (Orders σωστά εξαιρέθηκε, παραμένει μπλοκαρισμένο).
+
+### Pattern: "snapshot τη στιγμή του favorite" για notifications (χωρίς background jobs/cron)
+`favorites.price_at_favorite` (captured στο insert) vs ζωντανό `products.price` → price-drop badge στο Fan Dashboard.
+Νέο table `event_favorites` (δεν υπήρχε ΚΑΝΕΝΑΣ μηχανισμός "αγαπημένο event" πριν, μόνο το merch είχε favorites) με `snapshot_title`/`snapshot_date` vs ζωντανά `events.title`/`events.date` → "άλλαξε κάτι" badge. Υπολογίζεται ζωντανά στο read query.
+
+### Νέα αρχεία
+```
+src/queries/useEventFavorites.js       → useEventFavorites(fanId) + useToggleEventFavorite(fanId)
+src/queries/useFanFavoriteMerch.js     → cross-tenant aggregated, computed priceDropped/priceAtFavorite
+src/queries/useFanFavoriteEvents.js    → cross-tenant aggregated, computed changed
+src/components/Concerto/FanDashboard/
+  FanFavoriteMerchRoute.jsx    → cross-origin links στο σωστό tenant, κόκκινο "Έπεσε από Χ€"
+  FanFavoriteEventsRoute.jsx   → cross-origin links στο σωστό tenant, κόκκινο "Άλλαξε κάτι — έλεγξέ το"
+```
+`EventsList.jsx`: νέο heart-toggle button πάνω στην εικόνα κάθε event (ίδιο visual pattern με `ProductList.jsx` merch).
+`FanDashboardLayout.jsx`: `TenantChip` component (mobile sticky topbar πλήρης γραμμή + desktop rail logo-only με tooltip), click → `/about` του tenant.
+
+### Migrations
+`20260908110000_add_favorites_price_at_favorite.sql`, `20260908120000_add_event_favorites_table.sql` (νέο table, ίδιο RLS στυλ με `favorites`).
+
+### 🐛 Επιβεβαιώθηκε ΟΤΙ ΔΕΝ ήταν bug: tenant links στο "Αγαπημένα tenants" "δεν δουλεύουν"
+Ο χρήστης το ανέφερε με screenshots. Investigation: `device_bash curl` μπλοκαρισμένο από egress allowlist proxy (`403 blocked-by-allowlist`) → δούλεψε μέσω `javascript_tool` μέσα στο πραγματικό browser page, με το πραγματικό anon key. Επιβεβαιώθηκε: τα `tenant_domains` rows υπάρχουν σωστά, το click πραγματικά navigate-άρει σωστά (`athensrock.concerto.gr/about`, confirmed live via `tabs_context_mcp`). Το πρόβλημα ήταν μόνο ότι local dev χρειάζεται χειροκίνητο `:5173` port (προϋπάρχων, ήδη τεκμηριωμένος περιορισμός — τα domains στη βάση δεν έχουν port, σωστό για production). **Καμία αλλαγή κώδικα δεν έγινε** — δόθηκε στον χρήστη η επιλογή (αφήνουμε όπως είναι ή dev-only auto-port convenience), **δεν απαντήθηκε ακόμα, ανοιχτό**.
+
+---
+
+## 🐛 Σοβαρό bug: cross-tenant favorites/cart leakage — διορθώθηκε (ίδια μέρα, 8/9)
+
+### Symptom (live-επιβεβαιωμένο από τον χρήστη, screenshot)
+Favorite/cart items προστέθηκαν στο Villagers Band· ο χρήστης πήγε μετά στο Athens Rock Festival — ΤΑ ΙΔΙΑ counts στα badges, και ανοίγοντας τα dialogs, ΤΑ ΙΔΙΑ (λάθος tenant's) προϊόντα εμφανίζονταν.
+
+### Root cause
+`favorites` και `cart_items` δεν είχαν ΚΑΘΟΛΟΥ `tenant_id` column — scoped μόνο ανά `fan_id`, δηλαδή στην πράξη ΕΝΑ global cart/favorites list ανά fan σε όλη την πλατφόρμα, ενώ το UI (κάθε tenant's `TenantTopBar`/`FavoritesDialog`/`CartDialog`) το παρουσίαζε σαν να είναι ξεχωριστό ανά tenant. Το `FavoritesDialog.jsx` self-corrected ΜΕΡΙΚΩΣ (client-side filter έναντι `useProducts(tenantId)`) — το `CartDialog.jsx` ΔΕΝ self-corrected ΚΑΘΟΛΟΥ, render-άριζε το fan-global cart απευθείας.
+
+### Αρχιτεκτονική πρόθεση (επιβεβαιωμένη ρητά από τον χρήστη)
+Ανά tenant: favorites/cart/favorite events ΕΙΔΙΚΑ ΚΑΙ ΜΟΝΑΔΙΚΑ σε αυτόν. Μόνο στο Fan Dashboard (global): όλα μαζί, συγκεντρωτικά — ήδη το σωστό μοτίβο του Phase 2 παραπάνω.
+
+### Fix
+Migration `20260908130000_add_tenant_scoping_favorites_cart.sql` — `tenant_id` σε ΚΑΙ τα δύο tables, backfill από `products.tenant_id`, μετά `not null`.
+`useFavorites.js`/`useCart.js` rewritten πλήρως: `useFavorites(fanId, tenantId)`/`useCart(fanId, tenantId)`, φιλτράρουν με `.eq("tenant_id", tenantId)`, `enabled` απαιτεί και τα δύο.
+6 call sites ενημερώθηκαν: `Header.jsx`, `TenantTopBar.jsx`, `CartDialog.jsx` (+νέο `tenantId` prop), `FavoritesDialog.jsx`, `ProductList.jsx` (+νέο `tenantId` prop), `MerchCategoryRoute.jsx` (περνάει το prop κάτω).
+Το Fan Dashboard (`useFanFavoriteMerch.js`/`useFanFavoriteEvents.js`) ΣΚΟΠΙΜΑ ΔΕΝ άλλαξε — παραμένει χωρίς tenant filter, σωστά (aggregated by design).
+
+### Verification
+`npx eslint` + `npm run build` καθαρά. Live-verified από τον χρήστη μετά τα migrations ("ok ok leitourgei thanks").
+
+---
+
+## Follow/unfollow — πλήρης επανασχεδίαση, ΑΝΑΙΡΕΙ την προηγούμενη "auto-follow-all" απόφαση (ίδια μέρα, 8/9)
+
+### ⚠️ Αντικαθιστά ρητά την ενότητα "ConcertoBar — round 2" παραπάνω (7/9)
+Εκεί είχε αποφασιστεί (ρητά ως "για αρχή", προσωρινό): login = ακολουθεί ΑΥΤΟΜΑΤΑ ΟΛΟΥΣ τους tenants (`useFollowAllTenants`). Επιπλέον, κρυφά μέσα στο `useFanSession.js`, απλά η ΕΠΙΣΚΕΨΗ ενός tenant ενώ ήσουν συνδεδεμένος έκανε ΚΑΙ ΑΥΤΗ αυτόματο follow (silent upsert, καμία ενέργεια του fan). Ο χρήστης βρήκε αυτή τη συμπεριφορά μπερδεμένη/λάθος στην πράξη (screenshot: "+ Ακολουθείς" pill ενώ ήταν logged out — λόγω παλιού localStorage flag που "θυμόταν" follow status ΜΕΤΑ το logout) και ζήτησε ρητά νέο μοντέλο, με λεπτομερή περιγραφή.
+
+### Νέο μοντέλο (περιγράφηκε αναλυτικά από τον χρήστη, επιβεβαιώθηκε πριν την υλοποίηση)
+- Global login (ConcertoBar) ξεκλειδώνει search/favorite/καλάθι σε ΚΑΘΕ tenant — ανεξάρτητο από follow status.
+- Follow είναι ΡΗΤΗ ενέργεια, ανά tenant, ΜΟΝΟ όταν πατηθεί το κουμπί — ΠΟΤΕ αυτόματο (ούτε στο login, ούτε απλά επισκεπτόμενος μια σελίδα).
+- ΚΑΜΙΑ localStorage μνήμη follow status — logged-out πάντα δείχνει "Ακολούθησε", ανεξαρτήτως ιστορικού.
+- Logged-in + όχι follow: ΚΑΙ τα δύο ταυτόχρονα — search/favorite/cart icons ΚΑΙ κουμπί "+ Ακολούθησε" δίπλα τους.
+- Logged-in + follow: "Ακολουθείς" pill, πατήσιμο → unfollow (ίδιο mutation με το Fan Dashboard "Unfollow" button, `useUnfollowTenant`).
+- Avatar (Google profile pic) αφαιρέθηκε εντελώς από το `TenantTopBar` — η κατάσταση login/follow περνάει πλέον αποκλειστικά από το κείμενο του follow button.
+
+### Αλλαγές
+`src/queries/useFollowAllTenants.js` — **διαγράφηκε εντελώς**, αφαιρέθηκε η χρήση του από `ConcertoBar.jsx`.
+`src/queries/useFanProfile.js` — βρέθηκε **ορφανό, ανενεργό αντίγραφο** (debug `console.log`, ίδια παλιά auto-follow λογική), μη εισαγόμενο πουθενά — **διαγράφηκε**.
+`src/queries/useFanSession.js` — rewritten: αφαιρέθηκε το silent `tenant_follows` upsert + το `localStorage.setItem`, τώρα κάνει καθαρό `select` (ζωντανή, πραγματική DB state). Νέο export `useFollowTenant()` (ρητό follow mutation, καλείται ΜΟΝΟ από το κλικ).
+`src/components/Header/TenantTopBar.jsx` — αφαιρέθηκε το avatar `<img>`, μόνο search/favorite/cart icons πια, `justify-end`.
+`src/components/Header/Header.jsx` — αφαιρέθηκε το `hasFollowedBefore`/localStorage read εντελώς. `handleFollowClick`: not logged in → `onRequireAuth()` · logged in + following → `unfollowTenant.mutate(tenant.id)` · logged in + not following → `followTenant.mutate({fanId, tenantId})`. Layout: follow pill/button + `TenantTopBar` ταυτόχρονα όταν logged in (πριν ήταν either/or).
+`src/queries/useFanTenants.js` — `useUnfollowTenant`'s `onSuccess` invalidate-άρει τώρα ΚΑΙ `["fan_session", fanId]` (partial key, καλύπτει όλα τα tenants) ώστε το Header pill να ενημερώνεται άμεσα, όπου κι αν έγινε το unfollow (Fan Dashboard ή απευθείας από το tenant).
+
+### Verification
+`npx eslint` + `npm run build` καθαρά σε κάθε βήμα. Καμία αλλαγή στη βάση χρειάστηκε (το `tenant_follows` table υπήρχε ήδη, άλλαξε μόνο πότε γράφεται).
+
+---
+
+## FanIdCard — test/demo component (ίδια μέρα, 8/9)
+
+### Ζητήθηκε
+Νέο component στο Προφίλ, look σαν ευρωπαϊκή ταυτότητα (ορθογώνιο, avatar πάνω-αριστερά) — ρητά "test", για μελλοντική επιχειρηματική χρήση ("id" identity για το Concerto). Πεδία: αριθμός id (βάσει σειράς εγγραφής global — π.χ. "00004"), όνομα, επίθετο, ημερομηνία γέννησης, πόλη, σήμα verification, display name (θα χρησιμοποιηθεί αργότερα — απλά πρόσθεσέ το). Δίπλα στο "Αποθήκευση": νέο "Επεξεργασία" που ανοίγει stub φόρμα από κάτω (τα πραγματικά πεδία της TBD σε άλλο session). Test data για ό,τι δεν υπάρχει ακόμα σαν πραγματικό πεδίο στη βάση — μόνο όνομα/avatar/id number είναι πραγματικά δεδομένα του fan.
+
+### Νέα αρχεία
+```
+src/components/Concerto/FanDashboard/FanIdCard.jsx   → visual card, splitName() σπάει το πραγματικό full_name σε όνομα/επίθετο, test constants για τα υπόλοιπα
+src/queries/useFanIdNumber.js                          → useFanIdNumber(fanId), καλεί RPC (βλ. παρακάτω)
+```
+`FanProfileRoute.jsx`: render `<FanIdCard>`, νέο "Επεξεργασία" toggle button + disabled stub form preview (4 test πεδία, δεν αποθηκεύει ακόμα τίποτα — labeled ρητά ως preview).
+
+### 🐛 RLS θέμα εντοπίστηκε ΠΡΙΝ γίνει live bug (ο χρήστης ρώτησε ρητά: "δεν έχουμε τίποτα με τα RLS θέματα τώρα μετά το migration;")
+Η πρώτη υλοποίηση έκανε client-side `count` πάνω σε ΟΛΟΥΣ τους fans (`.lte("created_at", ...)`) — αλλά το `fans` table έχει RLS σαν όλα τα υπόλοιπα (`auth.uid() = id`, μόνο η δική σου γραμμή ορατή μέσω anon key). Θα επέστρεφε πάντα 1, δηλαδή "00001" σε ΚΑΘΕ fan — καμία σχέση με πραγματική σειρά εγγραφής. **Λύση, ίδιο pattern με `delete_own_account` (βλ. κύριο brief):** νέα SECURITY DEFINER function `get_own_fan_id_number()` — τρέχει server-side με αυξημένα δικαιώματα, self-scoped μέσω `auth.uid()` (καμία παράμετρος από τον client), επιστρέφει ΜΟΝΟ έναν ακέραιο· καμία διαρροή δεδομένων άλλου fan.
+
+### Migrations
+`20260908140000_add_fans_created_at.sql` — `fans.created_at`, ασφαλές additive (`IF NOT EXISTS`). Σημείωση: υπάρχουσες γραμμές παίρνουν όλες το ΙΔΙΟ timestamp (η στιγμή του migration, Postgres DDL behavior) — αποδεκτό, ο αριθμός είναι ρητά μόνο για UI/demo, όχι επίσημο μητρώο (ο ίδιος ο χρήστης το ξεκαθάρισε).
+`20260908150000_add_get_own_fan_id_number_function.sql` — η RLS-safe function.
+
+### Verification
+`npx eslint` + `npm run build` καθαρά. **Δεν έχει γίνει live browser verification ακόμα** (εκκρεμούν τα δύο migrations).
+
+---
+
+## 📋 Migrations σε εκκρεμότητα (8/9, να τρέξει ο χρήστης στο Supabase SQL editor, με αυτή τη σειρά)
+
+1. `20260908100000_add_fans_profile_customized.sql` — επιβεβαιωμένο ότι έτρεξε (indirect, "already exists" σε retry).
+2. `20260908110000_add_favorites_price_at_favorite.sql` — επιβεβαιωμένο ότι έτρεξε.
+3. `20260908120000_add_event_favorites_table.sql` — επιβεβαιωμένο ότι έτρεξε (verification query: 3/3 policies σωστά).
+4. `20260908130000_add_tenant_scoping_favorites_cart.sql` — **επιβεβαιωμένα έτρεξε, live-verified από τον χρήστη.**
+5. `20260908140000_add_fans_created_at.sql` — **εκκρεμεί.**
+6. `20260908150000_add_get_own_fan_id_number_function.sql` — **εκκρεμεί.**
+
+---
+
 ## Οδηγία προς AI assistant (Claude ή άλλο)
 
 > Αυτό είναι το επίσημο, ζωντανό log του React Router task. Ενημέρωσέ το σε κάθε βήμα (τι έγινε, τι αποφασίστηκε, τι εκκρεμεί) — μην αφήνεις να "χαθεί" η σειρά μέσα στο κύριο brief. Ακολούθα αυστηρά τους κανόνες εργασίας στην κορυφή αυτού του εγγράφου.

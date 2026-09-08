@@ -1,6 +1,6 @@
 import { useState } from "react";
+import { Outlet } from "react-router-dom";
 import { useTenant } from "./queries/useTenant";
-import Header from "./components/Header/Header";
 import ConcertoBar from "./components/Concerto/ConcertoBar";
 
 function App() {
@@ -21,17 +21,17 @@ function App() {
 
   return (
     <>
-      {/* Πάντα πάνω από το header ΚΑΘΕ tenant — global, όχι tenant-branded.
+      {/* Πάντα πάνω από ΟΛΑ τα child routes — global, όχι tenant-branded.
           Βλ. src/components/Concerto/ConcertoBar.jsx */}
       <ConcertoBar authOpen={authOpen} onAuthOpenChange={setAuthOpen} />
-      <div
-        style={{
-          backgroundColor: settings?.primary_color || "#ffffff",
-          minHeight: "100vh",
-        }}
-      >
-        <Header tenant={tenant} settings={settings} onRequireAuth={() => setAuthOpen(true)} />
-      </div>
+      {/* Ένα root Outlet, δύο layout clusters από κάτω (βλ. src/main.jsx):
+          TenantLayout.jsx (tenant chrome — about/merch/events) και
+          FanDashboardLayout.jsx (global, χωρίς tenant chrome — /account).
+          Σημείωση: το /account περνάει ΚΙ ΑΥΤΟ από το useTenant() παραπάνω
+          (χρειάζεται έγκυρο tenant subdomain για να φορτώσει καθόλου η
+          εφαρμογή σήμερα, δεν υπάρχει ακόμα κεντρικό concerto.gr) — δεν
+          χρησιμοποιεί tenant/settings, απλά περνάει από τον ίδιο guard. */}
+      <Outlet context={{ tenant, settings, onRequireAuth: () => setAuthOpen(true) }} />
     </>
   );
 }

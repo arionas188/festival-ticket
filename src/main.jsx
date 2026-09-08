@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
+import TenantLayout from './components/Header/TenantLayout.jsx'
 import MerchCategoriesRoute from './components/Merch/MerchCategoriesRoute.jsx'
 import MerchCategoryRoute from './components/Merch/MerchCategoryRoute.jsx'
 import ProductModalRoute from './components/Merch/ProductModalRoute.jsx'
@@ -11,6 +12,12 @@ import EventsRoute from './components/Events/EventsRoute.jsx'
 import EventModalRoute from './components/Events/EventModalRoute.jsx'
 import EventInfoRoute from './components/Events/EventInfoRoute.jsx'
 import InfoRoute from './components/About/InfoRoute.jsx'
+import FanDashboardLayout from './components/Concerto/FanDashboard/FanDashboardLayout.jsx'
+import FanProfileRoute from './components/Concerto/FanDashboard/FanProfileRoute.jsx'
+import FanTenantsRoute from './components/Concerto/FanDashboard/FanTenantsRoute.jsx'
+import FanFavoriteMerchRoute from './components/Concerto/FanDashboard/FanFavoriteMerchRoute.jsx'
+import FanFavoriteEventsRoute from './components/Concerto/FanDashboard/FanFavoriteEventsRoute.jsx'
+import FanOrdersRoute from './components/Concerto/FanDashboard/FanOrdersRoute.jsx'
 import ErrorPage from './components/ErrorPage/ErrorPage.jsx'
 
 const queryClient = new QueryClient()
@@ -28,31 +35,52 @@ const router = createBrowserRouter([
       // ορατό/μοιράσιμο URL. Το γυμνό domain συνεχίζει να δουλεύει όπως πριν
       // (redirect, όχι 404) — δεν αλλάζει τίποτα για τον επισκέπτη.
       { index: true, element: <Navigate to="/about" replace /> },
-      { path: 'about', element: <InfoRoute /> },
-      // /merch → πλέγμα κατηγοριών. Το προϊόν είναι child route, οπότε το modal
-      // κάθεται πάνω στο πλέγμα χωρίς κόλπα με location state.
+      // Tenant-branded σελίδες (cover/logo/tabs) — όλες μέσα από
+      // TenantLayout.jsx (πρώην απευθείας μέσα στο App.jsx, βλ. εκεί).
       {
-        path: 'merch',
-        element: <MerchCategoriesRoute />,
-        children: [{ path: 'product/:productId', element: <ProductModalRoute /> }],
-      },
-      // /merch/category/:categoryKey → λίστα προϊόντων. Ίδια λογική: το modal
-      // του προϊόντος ανοίγει πάνω στη συγκεκριμένη λίστα και τη διατηρεί σε refresh.
-      {
-        path: 'merch/category/:categoryKey',
-        element: <MerchCategoryRoute />,
-        children: [{ path: 'product/:productId', element: <ProductModalRoute /> }],
-      },
-      // /events → λίστα events. Το event είναι child route, οπότε το TicketDialog
-      // modal κάθεται πάνω στη λίστα χωρίς κόλπα με location state.
-      {
-        path: 'events',
-        element: <EventsRoute />,
+        element: <TenantLayout />,
         children: [
-          { path: 'event/:eventId', element: <EventModalRoute /> },
-          // Sibling route, όχι nested μέσα στο ticket route: το Info modal
-          // ανοίγει απευθείας πάνω στη λίστα, χωρίς να περνάει από το Ticket.
-          { path: 'event/:eventId/info', element: <EventInfoRoute /> },
+          { path: 'about', element: <InfoRoute /> },
+          // /merch → πλέγμα κατηγοριών. Το προϊόν είναι child route, οπότε το modal
+          // κάθεται πάνω στο πλέγμα χωρίς κόλπα με location state.
+          {
+            path: 'merch',
+            element: <MerchCategoriesRoute />,
+            children: [{ path: 'product/:productId', element: <ProductModalRoute /> }],
+          },
+          // /merch/category/:categoryKey → λίστα προϊόντων. Ίδια λογική: το modal
+          // του προϊόντος ανοίγει πάνω στη συγκεκριμένη λίστα και τη διατηρεί σε refresh.
+          {
+            path: 'merch/category/:categoryKey',
+            element: <MerchCategoryRoute />,
+            children: [{ path: 'product/:productId', element: <ProductModalRoute /> }],
+          },
+          // /events → λίστα events. Το event είναι child route, οπότε το TicketDialog
+          // modal κάθεται πάνω στη λίστα χωρίς κόλπα με location state.
+          {
+            path: 'events',
+            element: <EventsRoute />,
+            children: [
+              { path: 'event/:eventId', element: <EventModalRoute /> },
+              // Sibling route, όχι nested μέσα στο ticket route: το Info modal
+              // ανοίγει απευθείας πάνω στη λίστα, χωρίς να περνάει από το Ticket.
+              { path: 'event/:eventId/info', element: <EventInfoRoute /> },
+            ],
+          },
+        ],
+      },
+      // Fan Dashboard — global, όχι tenant-branded (βλ. FanDashboardLayout.jsx
+      // για το γιατί είναι sibling εδώ, όχι μέσα στο TenantLayout).
+      {
+        path: 'account',
+        element: <FanDashboardLayout />,
+        children: [
+          { index: true, element: <Navigate to="profile" replace /> },
+          { path: 'profile', element: <FanProfileRoute /> },
+          { path: 'tenants', element: <FanTenantsRoute /> },
+          { path: 'merch', element: <FanFavoriteMerchRoute /> },
+          { path: 'events', element: <FanFavoriteEventsRoute /> },
+          { path: 'orders', element: <FanOrdersRoute /> },
         ],
       },
     ],

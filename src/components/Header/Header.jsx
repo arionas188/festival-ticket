@@ -5,7 +5,8 @@ import bandLogoFallback from '../../assets/images/MwraStiFwtia.png'
 import bandCoverFallback from '../../assets/images/MwraStiFwtiaBand.webp'
 import TenantTopBar from "./TenantTopBar"
 import { useAuth } from "../../hooks/useAuth"
-import { useFanSession } from "../../queries/useFanSession"
+import { useFanSession, useFollowTenant } from "../../queries/useFanSession"
+import { useUnfollowTenant } from "../../queries/useFanTenants"
 import { useCart } from "../../queries/useCart"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 
@@ -25,22 +26,32 @@ export default function Header({ tenant, settings, onRequireAuth }) {
       : 'Πληροφορίες'
 
   const { user, isLoggedIn } = useAuth()
-  const { addItem } = useCart(user?.id)
+  const { addItem } = useCart(user?.id, tenant?.id)
   const { data: isFollowing, isLoading: followLoading } = useFanSession(isLoggedIn ? user : null, tenant?.id)
+  const followTenant = useFollowTenant()
+  const unfollowTenant = useUnfollowTenant(user?.id)
 
-  const { data: favoriteIds = [] } = useFavorites(user?.id)
+  const { data: favoriteIds = [] } = useFavorites(user?.id, tenant?.id)
   const toggleFavorite = useToggleFavorite(user?.id)
 
   // Το login γίνεται πλέον αποκλειστικά από το global ConcertoBar (πάνω από
   // το header — βλ. App.jsx, το onRequireAuth prop ανοίγει το dialog εκεί).
   // Το παλιό, τοπικό AuthGateDialog παραμένει στον φάκελο, ανενεργό — βλ.
-  // concerto-react-router-brief.md. Ίδιο onRequireAuth χρησιμοποιείται και
-  // για "Ακολούθησε" εδώ, και περνιέται στα child routes (π.χ. "πρόσθεσε στο
-  // καλάθι"/"αγαπημένα"/"εισιτήριο" όταν δεν είσαι συνδεδεμένος) μέσω Outlet
-  // context παρακάτω.
+  // concerto-react-router-brief.md. BUG FIX (8/9): το follow ΔΕΝ είναι πια
+  // αυτόματο (ούτε στο login, ούτε απλά επισκεπτόμενος το tenant) — γίνεται
+  // ΜΟΝΟ όταν ο ήδη-συνδεδεμένος fan πατήσει ρητά εδώ. Αν δεν είναι καν
+  // συνδεδεμένος, ανοίγει πρώτα το global login (onRequireAuth) — το ίδιο
+  // dialog που χρησιμοποιείται και στα child routes (π.χ. "πρόσθεσε στο
+  // καλάθι"/"αγαπημένα"/"εισιτήριο") μέσω Outlet context παρακάτω.
   function handleFollowClick() {
     if (!isLoggedIn) {
       onRequireAuth()
+      return
+    }
+    if (isFollowing) {
+      unfollowTenant.mutate(tenant.id)
+    } else {
+      followTenant.mutate({ fanId: user.id, tenantId: tenant.id })
     }
   }
 
@@ -73,12 +84,6 @@ export default function Header({ tenant, settings, onRequireAuth }) {
   const tenantLogo = settings?.logo_url || bandLogoFallback
   const tenantCover = settings?.cover_image_url || bandCoverFallback
 
-  const showTopBar = isLoggedIn && isFollowing
-
-  const hasFollowedBefore = tenant?.id
-    ? localStorage.getItem(`followed_tenant_${tenant.id}`) === "true"
-    : false
-
   return (
     <div className="min-h-screen bg-white">
       <img
@@ -95,25 +100,50 @@ export default function Header({ tenant, settings, onRequireAuth }) {
             className="size-24 rounded-full ring-4 ring-white sm:size-32"
           />
 
-          {showTopBar ? (
-            <div className="mb-1 flex-1">
-              <TenantTopBar
-                fanAvatarUrl={user?.user_metadata?.avatar_url}
-                tenantId={tenant?.id}
-                fanId={user?.id}
-                onQuickBuy={handleSelectProduct}
-              />
-            </div>
-          ) : (
-            <Button
-              onClick={handleFollowClick}
-              disabled={followLoading}
-              className="mb-1 rounded-full bg-green-600 px-2 py-3 text-sm font-semibold text-white shadow-md hover:bg-green-700"
-            >
-              <PlusIcon aria-hidden="true" className="mr-1.5 size-4" />
-              {hasFollowedBefore ? "Σύνδεση" : "Ακολούθησε"}
-            </Button>
-          )}
+          <div className="mb-1 flex flex-1 items-center gap-3">
+            {isLoggedIn ? (
+              <>
+                {/* Search/favorite/καλάθι ξεκλειδώνουν με το global login
+                    μόνο του (isLoggedIn) — ανεξάρτητα από το αν ακολουθεί
+                    ΚΑΙ αυτό το tenant. Το follow δείχνεται ξεχωριστά, δίπλα. */}
+                {isFollowing ? (
+                  <button
+                    type="button"
+                    onClick={handleFollowClick}
+                    disabled={unfollowTenant.isPending}
+                    className="inline-flex shrink-0 items-center rounded-full bg-green-50 px-3 py-1.5 text-sm font-semibold text-green-700 ring-1 ring-inset ring-green-600/20 hover:bg-red-50 hover:text-red-700 hover:ring-red-600/20"
+                  >
+                    Ακολουθείς
+                  </button>
+                ) : (
+                  <Button
+                    onClick={handleFollowClick}
+                    disabled={followLoading || followTenant.isPending}
+                    className="shrink-0 rounded-full bg-green-600 px-2 py-3 text-sm font-semibold text-white shadow-md hover:bg-green-700"
+                  >
+                    <PlusIcon aria-hidden="true" className="mr-1.5 size-4" />
+                    Ακολούθησε
+                  </Button>
+                )}
+
+                <div className="flex-1">
+                  <TenantTopBar
+                    tenantId={tenant?.id}
+                    fanId={user?.id}
+                    onQuickBuy={handleSelectProduct}
+                  />
+                </div>
+              </>
+            ) : (
+              <Button
+                onClick={handleFollowClick}
+                className="rounded-full bg-green-600 px-2 py-3 text-sm font-semibold text-white shadow-md hover:bg-green-700"
+              >
+                <PlusIcon aria-hidden="true" className="mr-1.5 size-4" />
+                Ακολούθησε
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="mt-3">
