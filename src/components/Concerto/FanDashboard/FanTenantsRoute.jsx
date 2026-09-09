@@ -1,6 +1,7 @@
 import { useOutletContext } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { useFanTenants, useUnfollowTenant } from "../../../queries/useFanTenants"
+import { crossTenantHref } from "../../../lib/tenantLink"
 
 export default function FanTenantsRoute() {
   const { fanId } = useOutletContext()
@@ -30,7 +31,7 @@ export default function FanTenantsRoute() {
                   // κάθε tenant ζει σε δικό του subdomain, δεν είναι
                   // client-side route μέσα σε αυτή την εφαρμογή.
                   <a
-                    href={`//${tenant.domain}/about`}
+                    href={crossTenantHref(tenant.domain, "/about")}
                     className="text-sm font-semibold text-gray-900 hover:underline"
                   >
                     {tenant.name}

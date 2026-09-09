@@ -1,5 +1,6 @@
 import { useOutletContext } from "react-router-dom"
 import { useFanFavoriteMerch } from "../../../queries/useFanFavoriteMerch"
+import { crossTenantHref } from "../../../lib/tenantLink"
 
 export default function FanFavoriteMerchRoute() {
   const { fanId } = useOutletContext()
@@ -28,7 +29,7 @@ export default function FanFavoriteMerchRoute() {
                   // του δικού του tenant, όχι εδώ. Δέχεται UUID (βλ.
                   // ProductModalRoute.jsx), δεν χρειάζεται slug.
                   <a
-                    href={`//${item.domain}/merch/product/${item.productId}`}
+                    href={crossTenantHref(item.domain, `/merch/product/${item.productId}`)}
                     className="truncate text-sm font-semibold text-gray-900 hover:underline"
                   >
                     {item.name}

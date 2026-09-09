@@ -1,38 +1,47 @@
 import { CheckBadgeIcon } from "@heroicons/react/24/solid"
 
-// TEST DATA (8/9) — demo component, για να δειχτεί σε συνεργάτη. Επίθετο/
-// ημ. γέννησης/πόλη/display name/verified ΔΕΝ υπάρχουν ακόμα σαν πραγματικά
-// πεδία στη βάση (fans table) — θα οριστούν σωστά σε επόμενο πέρασμα (ο
-// χρήστης θα πει τότε τι ακριβώς θα έχει η φόρμα). Το όνομα, το avatar και
-// ο αριθμός ταυτότητας (idNumber prop, βλ. useFanIdNumber.js) είναι ήδη
-// πραγματικά δεδομένα του fan.
-const TEST_LAST_NAME = "Γιαλαμάς"
-const TEST_BIRTH_DATE = "14/03/1990"
-const TEST_CITY = "Ιωάννινα"
-const TEST_DISPLAY_NAME = "kgialamas"
+// Ενημέρωση (9/9, β' πέρασμα): αντί για την ημ. γέννησης, εμφανίζεται
+// ΜΟΝΟ η υπολογισμένη ηλικία — υπολογίζεται ΖΩΝΤΑΝΑ σε κάθε render από
+// το πραγματικό dateOfBirth (ΔΕΝ αποθηκεύεται σαν ξεχωριστός αριθμός
+// πουθενά), οπότε αυξάνεται μόνη της κάθε χρόνο, αυτόματα — ρητό αίτημα
+// χρήστη. Verified badge έγινε πράσινο (ήταν μπλε) — ίδιο, ρητό αίτημα.
 const TEST_VERIFIED = true
+
+function calculateAge(dateOfBirth) {
+  if (!dateOfBirth) return null
+  const dob = new Date(dateOfBirth)
+  const today = new Date()
+  let age = today.getFullYear() - dob.getFullYear()
+  const hasHadBirthdayThisYear =
+    today.getMonth() > dob.getMonth() ||
+    (today.getMonth() === dob.getMonth() && today.getDate() >= dob.getDate())
+  if (!hasHadBirthdayThisYear) age -= 1
+  return age
+}
 
 function capitalize(word) {
   return word ? word.charAt(0).toUpperCase() + word.slice(1) : word
 }
 
-// Το πραγματικό full_name είναι ένα ενιαίο πεδίο (βλ. syncFanFromAuth.js) —
-// σπάει εδώ σε όνομα/επίθετο μόνο για την εμφάνιση της κάρτας. Αν δεν
-// υπάρχει δεύτερη λέξη (π.χ. μόνο "Konstantinos"), πέφτει στο test επίθετο
-// παραπάνω, μιας και δεν έχουμε ακόμα πραγματικό πεδίο επιθέτου.
+// Fallback ΜΟΝΟ — όταν δεν υπάρχουν ακόμα πραγματικά firstName/lastName
+// από τη νέα φόρμα προφίλ, σπάει το (auto-synced από Google) full_name σε
+// όνομα/επίθετο για να μην είναι κενή η κάρτα.
 function splitName(fullName) {
   const parts = (fullName || "").trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return { firstName: "", lastName: TEST_LAST_NAME }
+  if (parts.length === 0) return { firstName: "", lastName: "" }
   const [first, ...rest] = parts
   return {
     firstName: capitalize(first),
-    lastName: rest.length > 0 ? capitalize(rest.join(" ")) : TEST_LAST_NAME,
+    lastName: rest.length > 0 ? capitalize(rest.join(" ")) : "",
   }
 }
 
-export default function FanIdCard({ fan, idNumber }) {
-  const { firstName, lastName } = splitName(fan?.full_name)
+export default function FanIdCard({ fan, idNumber, dateOfBirth, city, firstName, lastName, displayName }) {
+  const fallback = splitName(fan?.full_name)
+  const resolvedFirstName = firstName || fallback.firstName
+  const resolvedLastName = lastName || fallback.lastName
   const idLabel = idNumber != null ? String(idNumber).padStart(5, "0") : "-----"
+  const age = calculateAge(dateOfBirth)
 
   return (
     <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -47,7 +56,7 @@ export default function FanIdCard({ fan, idNumber }) {
         <img
           alt=""
           src={fan?.avatar_url}
-          className="size-20 shrink-0 rounded-lg object-cover ring-1 ring-gray-200"
+          className="size-14 shrink-0 rounded-full object-cover ring-1 ring-gray-200"
         />
 
         <div className="min-w-0 flex-1 space-y-2">
@@ -55,27 +64,25 @@ export default function FanIdCard({ fan, idNumber }) {
             <p className="text-[10px] font-semibold tracking-wide text-gray-400 uppercase">
               Επώνυμο
             </p>
-            <p className="truncate text-sm font-semibold text-gray-900">{lastName || "—"}</p>
+            <p className="truncate text-sm font-semibold text-gray-900">{resolvedLastName || "—"}</p>
           </div>
           <div>
             <p className="text-[10px] font-semibold tracking-wide text-gray-400 uppercase">
               Όνομα
             </p>
-            <p className="truncate text-sm font-semibold text-gray-900">{firstName || "—"}</p>
+            <p className="truncate text-sm font-semibold text-gray-900">{resolvedFirstName || "—"}</p>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 px-4 pb-4">
         <div>
-          <p className="text-[10px] font-semibold tracking-wide text-gray-400 uppercase">
-            Ημ. γέννησης
-          </p>
-          <p className="text-sm text-gray-900">{TEST_BIRTH_DATE}</p>
+          <p className="text-[10px] font-semibold tracking-wide text-gray-400 uppercase">Ηλικία</p>
+          <p className="text-sm text-gray-900">{age != null ? `${age} ετών` : "—"}</p>
         </div>
         <div>
           <p className="text-[10px] font-semibold tracking-wide text-gray-400 uppercase">Πόλη</p>
-          <p className="text-sm text-gray-900">{TEST_CITY}</p>
+          <p className="text-sm text-gray-900">{city || "—"}</p>
         </div>
       </div>
 
@@ -84,10 +91,10 @@ export default function FanIdCard({ fan, idNumber }) {
           <p className="text-[10px] font-semibold tracking-wide text-gray-400 uppercase">
             Display name
           </p>
-          <p className="truncate text-xs text-gray-600">@{TEST_DISPLAY_NAME}</p>
+          <p className="truncate text-xs text-gray-600">{displayName ? `@${displayName}` : "—"}</p>
         </div>
         {TEST_VERIFIED && (
-          <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-blue-600">
+          <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-green-600">
             <CheckBadgeIcon className="size-4" />
             Verified
           </span>

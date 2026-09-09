@@ -631,14 +631,169 @@ src/queries/useFanIdNumber.js                          → useFanIdNumber(fanId)
 
 ---
 
-## 📋 Migrations σε εκκρεμότητα (8/9, να τρέξει ο χρήστης στο Supabase SQL editor, με αυτή τη σειρά)
+## 📋 Migrations σε εκκρεμότητα (ενημερωμένο 9/9, να τρέξει ο χρήστης στο Supabase SQL editor, με αυτή τη σειρά)
 
 1. `20260908100000_add_fans_profile_customized.sql` — επιβεβαιωμένο ότι έτρεξε (indirect, "already exists" σε retry).
 2. `20260908110000_add_favorites_price_at_favorite.sql` — επιβεβαιωμένο ότι έτρεξε.
 3. `20260908120000_add_event_favorites_table.sql` — επιβεβαιωμένο ότι έτρεξε (verification query: 3/3 policies σωστά).
 4. `20260908130000_add_tenant_scoping_favorites_cart.sql` — **επιβεβαιωμένα έτρεξε, live-verified από τον χρήστη.**
-5. `20260908140000_add_fans_created_at.sql` — **εκκρεμεί.**
-6. `20260908150000_add_get_own_fan_id_number_function.sql` — **εκκρεμεί.**
+5. `20260908140000_add_fans_created_at.sql` — **επιβεβαιωμένα έτρεξε ("ta etreksa ok").**
+6. `20260908150000_add_get_own_fan_id_number_function.sql` — **επιβεβαιωμένα έτρεξε ("ta etreksa ok").**
+7. `20260909100000_add_encrypted_fan_private_details.sql` — **επιβεβαιωμένα έτρεξε, live-verified από τον χρήστη (SQL check, όλα `1`).**
+8. `20260909110000_encrypt_all_fan_personal_fields.sql` — **επιβεβαιωμένα έτρεξε, DB-verified (backfill 5/5 fans, καμία απώλεια).**
+9. `20260909120000_add_full_fan_profile_fields.sql` — **επιβεβαιωμένα έτρεξε ("Success. No rows returned").**
+10. `20260909130000_fan_profile_multi_tenant_and_display_name_check.sql` — **εκκρεμεί.**
+
+---
+
+---
+
+## Dev-only auto-port για cross-tenant links (9/9)
+
+### Πρόβλημα
+Cross-tenant links (Fan Dashboard: tenant chip, αγαπημένα tenants/merch/events) φτιάχνονται από το καθαρό `tenant_domains.domain` — σωστό για production (κανένα port εκεί). Σε τοπικό dev όμως, το Vite server ακούει πάντα στο `:5173`· χωρίς αυτό στο URL, τα links "δεν φορτώνουν τίποτα" τοπικά (φαίνονται χαλασμένα, δεν είναι).
+
+### Λύση
+Νέο `src/lib/tenantLink.js`, `crossTenantHref(domain, path)`: προσθέτει αυτόματα `:5173` ΜΟΝΟ όταν `import.meta.env.DEV === true` (επίσημο Vite flag, `true` μόνο σε `npm run dev`, `false` αυτόματα σε production build). **Καμία χειροκίνητη αλλαγή δεν θα χρειαστεί όταν πάμε live** — το build το απενεργοποιεί μόνο του, μηδενικό ρίσκο να "ξεχαστεί" ενεργό σε production.
+
+Εφαρμόστηκε σε 3 σημεία: `FanTenantsRoute.jsx`, `FanFavoriteMerchRoute.jsx`, `FanFavoriteEventsRoute.jsx`.
+
+### Verification
+`npx eslint` + `npm run build` καθαρά (βρέθηκε κι ένα άσχετο EPERM στο καθάρισμα του `dist/` λόγω file-delete permissions στο sandboxed shell — λύθηκε, άσχετο με τον κώδικα).
+
+---
+
+## Ασφαλής (κρυπτογραφημένη) αποθήκευση ευαίσθητων πεδίων προφίλ — GDPR/security συζήτηση (9/9)
+
+### Ζητήθηκε
+Ο χρήστης ρώτησε ρητά: πριν αποθηκεύσουμε πραγματικά προσωπικά δεδομένα (ημ. γέννησης, πόλη — τα test πεδία του FanIdCard) στη βάση, πώς διαχειριζόμαστε GDPR + ρίσκο hack/breach στο μέγιστο δυνατό βαθμό; Ζήτησε όλες τις δυνατές λύσεις, ιεραρχημένες από την καλύτερη στη χειρότερη.
+
+### Απάντηση (δόθηκε στο chat, όχι εδώ αναλυτικά) — 5 βαθμίδες
+1. Data minimization (μη συλλέγεις ό,τι δεν χρειάζεσαι) — προαπαιτούμενο, όχι εναλλακτική αρχιτεκτονική.
+2. **Encryption για ευαίσθητα πεδία** (ξεχωριστό table, κρυπτογραφημένο, RLS) — **επιλέχθηκε από τον χρήστη**.
+3. Απλό RLS όπως το υπόλοιπο project (ήδη το βασικό μας επίπεδο).
+4. Ίδιο με #3 χωρίς σαφή πολιτική retention/διαγραφής.
+5. Plaintext/χαλαρά policies/no MFA — να αποφευχθεί εντελώς.
+Επισημάνθηκε ρητά (νομικό κομμάτι, με caveat "δεν είμαι δικηγόρος"): EU region confirmation, Privacy Policy/ToS, DPA με Supabase — ήδη pending items στο κύριο brief. Και ξεχωριστή σημείωση: πραγματικό επίσημο έγγραφο ταυτότητας (ΑΔΤ/διαβατήριο) θα ήταν εντελώς διαφορετική κατηγορία — εξειδικευμένος πάροχος KYC, όχι δική μας αποθήκευση, αν ποτέ χρειαστεί.
+
+### Υλοποίηση: Επιλέχθηκε tier 2 (encryption)
+**Μηχανισμός:** Supabase Vault (`vault.create_secret`/`vault.decrypted_secrets`) κρατάει ένα symmetric encryption key — δημιουργείται ΜΙΑ φορά, τυχαίο, ΠΟΤΕ ορατό εκτός βάσης. `pgcrypto` (`pgp_sym_encrypt`/`pgp_sym_decrypt`) κάνει το actual encrypt/decrypt, ΜΟΝΟ μέσα σε 2 SECURITY DEFINER functions (ίδιο pattern με `delete_own_account`/`get_own_fan_id_number` ήδη στο project) — self-scoped `auth.uid()`, καμία `fan_id` παράμετρος από τον client.
+
+**Νέο table:** `fan_private_details` (`fan_id` PK/FK, `date_of_birth_enc bytea`, `city_enc bytea`) — ΞΕΧΩΡΙΣΤΟ από το `fans`, με RLS (`auth.uid() = fan_id`) ΕΠΙΠΛΕΟΝ της encryption (defense-in-depth: ακόμα κι αν κάποιος διαβάσει τη γραμμή, βλέπει ciphertext, όχι κείμενο).
+
+**Ρητά ΕΚΤΟΣ αυτού του encrypted table** (σκόπιμα): Επίθετο, Display name — παραμένουν σκόπιμα plain/test data προς το παρόν, ίδιο επίπεδο με το ήδη υπάρχον `fans.full_name`. Τα ακριβή τους πεδία/στήλες παραμένουν ανοιχτό θέμα (ο χρήστης δεν έχει πει ακόμα την τελική λίστα πεδίων της πλήρους φόρμας — ξεκίνησε αυτή τη συζήτηση GDPR πριν προλάβει να απαντήσει).
+
+### Νέα/αλλαγμένα αρχεία
+```
+supabase/migrations/20260909100000_add_encrypted_fan_private_details.sql
+src/queries/useFanPrivateDetails.js   → useFanPrivateDetails(fanId) + useUpdateFanPrivateDetails(fanId)
+```
+`FanIdCard.jsx`: `dateOfBirth`/`city` έγιναν πραγματικά props (πριν TEST constants) — Επίθετο/Display name/Verified παραμένουν test.
+`FanProfileRoute.jsx`: το "Επεξεργασία" stub έγινε ΞΕΧΩΡΙΣΤΟ, πραγματικό `<form>` (όχι nested μέσα στο form του Ονόματος) — ημ. γέννησης (`type="date"`) + πόλη είναι πλέον λειτουργικά, αποθηκεύουν κρυπτογραφημένα· Επίθετο/Display name παραμένουν `disabled`/test.
+
+### Verification
+`npx eslint` + `npm run build` καθαρά. **Δεν έχει γίνει live browser verification ακόμα** (εκκρεμεί το migration).
+
+### ⚠️ Σημείωση αν σκάσει το migration
+Αν βγει σφάλμα `schema "vault" does not exist`: το Vault extension χρειάζεται να ενεργοποιηθεί πρώτα από το Supabase dashboard (Database → Extensions → "vault"), μετά ξανατρέξιμο το migration.
+
+---
+
+## Επέκταση encryption σε ΟΛΑ τα προσωπικά πεδία (email/full_name/avatar_url) — 9/9
+
+### Ζητήθηκε
+Μετά το encryption του date_of_birth/city (πάνω), ο χρήστης ρώτησε ρητά αν μπορούμε να κρυπτογραφήσουμε ΟΛΑ τα στοιχεία — ρητά διπλός στόχος: (1) προστασία από hack/leak, ΚΑΙ (2) να μην μπορεί ΟΥΤΕ ο ίδιος, ως Concerto admin, να δει τα προσωπικά στοιχεία των fans από τη βάση.
+
+### Σημαντική διευκρίνιση δόθηκε ΠΡΙΝ την υλοποίηση
+Ο στόχος #2 (admin δεν βλέπει τίποτα) ΔΕΝ επιτυγχάνεται με server-held key (Vault/pgcrypto, το μοντέλο που ήδη χρησιμοποιούμε) — ο admin ελέγχει το Vault key και το SQL editor, άρα μπορεί πάντα να αποκρυπτογραφήσει. Μόνο πραγματικό end-to-end/zero-knowledge encryption (κλειδί ΜΟΝΟ στη συσκευή του fan, ποτέ στον server) θα πετύχαινε αυτό — παρουσιάστηκαν τα πραγματικά μειονεκτήματα (μόνιμη απώλεια δεδομένων αν χαθεί/αλλάξει η συσκευή/browser, καμία server-side χρήση των δεδομένων, μεγάλη πολυπλοκότητα, δεν υπάρχει φυσικό secret αφού το login είναι μόνο Google OAuth). Ο χρήστης επέλεξε να ΜΗΝ προχωρήσει σε αυτό, και να επεκτείνει απλά το ΥΠΑΡΧΟΝ server-side μοντέλο (προστασία από external leak/hack) σε email/full_name/avatar_url. Επιβεβαιώθηκε ρητά με AskUserQuestion: "Ναι, όλα τα προσωπικά πεδία".
+
+### ⚠️ Δομικός περιορισμός — να το θυμόμαστε πάντα
+Το `auth.users` table του ίδιου του Supabase Auth (email/name/avatar από Google OAuth login) παραμένει ΠΑΝΤΑ plaintext, ό,τι κι αν κάνουμε στα δικά μας tables — το διαχειρίζεται το Supabase Auth, όχι εμείς, και το χρειάζεται plaintext για να δουλέψει το ίδιο το login/session. Ορατό από Authentication → Users στο Supabase dashboard, σε όποιον έχει πρόσβαση admin στο project (ίδιο επίπεδο πρόσβασης που θα είχε έτσι κι αλλιώς μέσω του SQL editor). Το encryption που κάνουμε προστατεύει τα ΔΙΚΑ ΜΑΣ tables (`fans`/`fan_private_details`) από leak/hack — δεν είναι, και δεν μπορεί δομικά να γίνει, "αόρατο από τον admin".
+
+### Υλοποίηση
+Επεκτάθηκε το ΥΠΑΡΧΟΝ `fan_private_details` table (ίδιο Vault key, ίδιο μηχανισμό με date_of_birth/city) με 3 νέες στήλες: `email_enc`, `full_name_enc`, `avatar_url_enc`. Backfill των υπαρχόντων plaintext τιμών από το `fans`, μετά DROP των παλιών plaintext στηλών (`email`, `full_name`, `avatar_url`) — δεν υπάρχουν πια ΚΑΘΟΛΟΥ plaintext σε δικό μας table.
+
+Τρεις νέες SECURITY DEFINER functions (ίδιο pattern, `auth.uid()` μόνο):
+- `sync_own_fan_from_auth(p_email, p_full_name, p_avatar_url)` — αντικαθιστά το παλιό client-side upsert· ίδια λογική "μην ξαναγράφεις full_name/avatar_url αν profile_customized=true", μετακόμισε server-side.
+- `get_own_fan_identity()` — επιστρέφει `(full_name, avatar_url, email, profile_customized)`, ΙΔΙΟ σχήμα με το παλιό client-side select, ώστε `ConcertoBar.jsx`/`FanProfileRoute.jsx`/`FanIdCard.jsx` να ΜΗΝ χρειαστούν καμία αλλαγή.
+- `set_own_fan_full_name(p_full_name)` — αντικαθιστά το παλιό client-side update.
+
+### Αλλαγμένα αρχεία
+```
+supabase/migrations/20260909110000_encrypt_all_fan_personal_fields.sql
+src/queries/syncFanFromAuth.js   → πλέον καλεί μόνο supabase.rpc("sync_own_fan_from_auth", ...)
+src/queries/useFanAccount.js     → useFanAccount καλεί get_own_fan_identity RPC, useUpdateFanProfile καλεί set_own_fan_full_name RPC
+```
+Καμία αλλαγή σε κανένα component (`ConcertoBar.jsx`, `Header.jsx`, `FanProfileRoute.jsx`, `FanIdCard.jsx`) — το external σχήμα των hooks διατηρήθηκε ρητά ίδιο.
+
+### Verification
+`npx eslint` + `npm run build` καθαρά. **Δεν έχει γίνει live browser verification ακόμα** (εκκρεμεί το migration — πρέπει να τρέξει ΜΕΤΑ το `20260909100000`, χρειάζεται το ίδιο Vault key).
+
+---
+
+## Πλήρης φόρμα προφίλ fan — Όνομα/Επίθετο/Display name/Τηλέφωνο/Ημ. γέννησης/Πόλη/Αγαπημένα (9/9)
+
+### Ζητήθηκε
+Ο χρήστης έδωσε ρητή λίστα πεδίων για την πλήρη φόρμα προφίλ (αντικαθιστά το παλιό stub): Όνομα, Επίθετο, Display name, Ημερομηνία γέννησης, Πόλη που ζει τώρα, Αγαπημένα είδη μουσικής, Αγαπημένο tenant, Τηλέφωνο. Ζήτησε ρητά: (α) να ακολουθηθούν επίσημα/mainstream React patterns για το validation (ανέφερε αμυδρά "συνεργάζεται με κάποιον" — evolved σε react-hook-form + zod, βλ. παρακάτω), με αναφορά τι χρησιμοποιήθηκε στο τέλος· (β) το ίδιο το pattern (forms + encryption) να καταγραφεί σε ΞΕΧΩΡΙΣΤΟ, επαναχρησιμοποιήσιμο doc — γιατί θα χρειαστεί ξανά σε άλλα dashboards. Βλ. νέο `concerto-forms-and-encryption-brief.md` για το ίδιο το pattern· εδώ μόνο το τι έγινε σήμερα.
+
+### Προαπαιτούμενη απόφαση (AskUserQuestion πριν την υλοποίηση)
+Δύο από τα 8 πεδία (Αγαπημένα είδη μουσικής, Αγαπημένο tenant) δεν είναι προσωπικά αναγνωριστικά σαν τα υπόλοιπα — ρωτήθηκε αν κρυπτογραφούνται κι αυτά ή μένουν απλά/αναζητήσιμα. Επιλέχθηκε: **απλά, αναζητήσιμα** (χρήσιμα για μελλοντικά στατιστικά/recommendations ανά tenant στο Tenant Admin Dashboard).
+
+### Υλοποίηση
+**Migration `20260909120000_add_full_fan_profile_fields.sql`:** 4 νέες encrypted στήλες στο `fan_private_details` (`first_name_enc`, `last_name_enc`, `display_name_enc`, `phone_enc`) + 2 νέες plain στήλες στο `fans` (`favorite_genres text[]`, `favorite_tenant_id uuid → tenants`). Νέο ζεύγος SECURITY DEFINER RPCs: `get_own_fan_full_profile()` / `set_own_fan_full_profile(...)` — ΜΙΑ ενιαία save/load για ΟΛΗ τη φόρμα (αντί για σκόρπιες, ξεχωριστές functions ανά 1-2 πεδία όπως πριν). Οι παλιές `set_own_fan_full_name`/`set_own_fan_private_details`/`get_own_fan_private_details` ΔΕΝ διαγράφηκαν (ασφαλές να μείνουν), απλά ο client δεν τις καλεί πια.
+
+**Validation: react-hook-form + zod + @hookform/resolvers** (νέα dependencies, `npm install`). Νέο `src/lib/fanProfileSchema.js` (schema + στατική λίστα `FAN_MUSIC_GENRES`, 15 είδη v1). Επιλέχθηκε γιατί είναι ο mainstream συνδυασμός στο React ecosystem ΚΑΙ επειδή τα ήδη εγκατεστημένα shadcn `Field`/`FieldError` primitives (`src/components/ui/field.jsx`) ήταν ήδη φτιαγμένα ακριβώς για αυτό το σχήμα errors. Uncontrolled-first από φύση (React 19 περνάει `ref` σαν κανονικό prop, δουλεύει κατευθείαν με τα υπάρχοντα `Input`/`Textarea` χωρίς `forwardRef`) — ταιριάζει με το ήδη υπάρχον project preference να αποφεύγονται `useState`+`useEffect` sync σε forms.
+
+**Νέο UI primitive:** `src/components/ui/select.jsx` — δεν υπήρχε `Select` στο project. Το `npx shadcn add select` ΑΠΕΤΥΧΕ (μπλοκαρισμένο `ui.shadcn.com` σε αυτό το sandboxed shell) — γράφτηκε χειροκίνητα, ίδιο στυλ/pattern με τα υπάρχοντα `ui/*.jsx` (`radix-ui` package, `cn()`, `data-slot`).
+
+### Αλλαγμένα/νέα αρχεία
+```
+supabase/migrations/20260909120000_add_full_fan_profile_fields.sql
+src/lib/fanProfileSchema.js               → zod schema + FAN_MUSIC_GENRES
+src/components/ui/select.jsx              → νέο, χειροκίνητο (Radix)
+src/queries/useFanFullProfile.js          → useFanFullProfile(fanId) + useUpdateFanFullProfile(fanId)
+src/queries/useAllTenants.js              → useAllTenants(), για το dropdown "Αγαπημένο tenant"
+```
+`FanProfileRoute.jsx`: ΠΛΗΡΗΣ επανασχεδίαση — ΜΙΑ ενιαία φόρμα (πριν ήταν δύο ξεχωριστά forms + 2 disabled test πεδία) με 8 πεδία: text (Όνομα/Επίθετο/Display name/Πόλη), tel (Τηλέφωνο), date (Ημ. γέννησης), multi-select chips (Αγαπημένα είδη μουσικής, `Controller`-managed array), `Select` dropdown (Αγαπημένο tenant, από `useAllTenants()`).
+`FanIdCard.jsx`: νέα props `firstName`/`lastName`/`displayName` (πραγματικά, από τη νέα φόρμα) — fallback στο παλιό `splitName(fan.full_name)` ΜΟΝΟ όσο ο fan δεν έχει ακόμα συμπληρώσει τη νέα φόρμα, ώστε η κάρτα να μην είναι ποτέ κενή.
+`useFanAccount.js`: αφαιρέθηκε το `useUpdateFanProfile` (πλέον orphaned, αντικαταστάθηκε από `useUpdateFanFullProfile`) — το `useFanAccount` (read) παραμένει ίδιο, εξακολουθεί να τροφοδοτεί ConcertoBar/badge.
+`src/queries/useFanPrivateDetails.js` — **διαγράφηκε** (orphaned, superseded από `useFanFullProfile.js`).
+
+### Ρητή, σκόπιμη απόφαση σχεδίασης
+Το `full_name_enc`/`get_own_fan_identity`/`sync_own_fan_from_auth` (auto-sync από Google σε κάθε login) παραμένουν ΕΝΤΕΛΩΣ ανεπηρέαστα και ξεχωριστά από τα νέα, πραγματικά `first_name`/`last_name` που ορίζει ο ίδιος ο fan. Η ΣΥΜΠΕΡΙΦΟΡΑ (ποιο δείχνει πού, πότε προτεραιοποιείται το ένα έναντι του άλλου κλπ) είναι **ρητά ανοιχτό θέμα** — ο χρήστης θα την ορίσει σε επόμενο μήνυμα ("θα σου πω πώς θέλω να λειτουργούν αυτά τα δεδομένα").
+
+### Verification
+`npx eslint .` + `npm run build` καθαρά (μόνο τα ίδια 13, pre-existing, άσχετα errors σε `ui/*.jsx`). **Δεν έχει γίνει live browser verification ακόμα** (εκκρεμεί το migration).
+
+---
+
+## Πλήρης φόρμα προφίλ — UX/behavior βελτιώσεις, β' πέρασμα (9/9)
+
+### Ζητήθηκε (ένα μεγάλο μήνυμα, ρητές αρχές)
+Μετά το πρώτο πέρασμα (μόνο τα πεδία), ο χρήστης όρισε πώς πρέπει να "λειτουργούν": (1) save κλείνει τη φόρμα, μένει μόνο το κουμπί "Επεξεργασία"· (2) Όνομα/Επίθετο/Πόλη κεφαλαιοποιούνται αυτόματα (πρώτο γράμμα), Display name ΟΧΙ (μένει όπως το γράφει ο fan)· (3) Display name ελέγχεται για μοναδικότητα live, κοκκινίζει + μπλοκάρει save αν υπάρχει ήδη· (4) Τηλέφωνο: επιλογή χώρας → σωστό πρόθεμα (+30 default Ελλάδα) → μορφή κλικάρεται για κλήση· (5) Ημ. γέννησης → εμφανίζεται ΜΟΝΟ η ηλικία, υπολογισμένη ζωντανά (αυξάνεται μόνη της κάθε χρόνο)· (6) Πόλη παραμένει ορατή στο ID· (7) "Αγαπημένο tenant" γίνεται "Αγαπημένα tenants" (πολλαπλή επιλογή, checkboxes), πηγή = όσα πραγματικά ακολουθεί (όχι όλα τα tenants), με search bar στη θέση του "— Κανένα —" για μεγάλες λίστες· (8) UI/UX: το ID card μένει sticky στο πάνω μέρος καθώς κάνεις scroll στη φόρμα, ενημερώνεται LIVE καθώς πληκτρολογεί ο fan (όχι μόνο μετά το save)· verified badge γίνεται πράσινο.
+
+### ⚠️ ΑΝΑΘΕΩΡΗΘΗΚΕ πριν καν τρέξει το migration: display_name έγινε ΑΠΛΟ
+Αφού εξηγήθηκε το tradeoff (decrypt-and-compare function, αργό σε μεγάλη κλίμακα) ο χρήστης αποφάσισε ρητά: το display_name να ΜΗΝ είναι κρυπτογραφημένο — θέλει στιγμιαίο έλεγχο διαθεσιμότητας ακόμα κι αν γίνει μεγάλη ταυτόχρονη προσέλευση fans ("όταν θα γίνεται χαμός"). Πριν το migration `20260909130000` προλάβει να τρέξει, ξαναγράφτηκε: το `display_name` μετακόμισε ΑΠΛΟ στο `fans` (όχι πια `display_name_enc` στο `fan_private_details`), με **πραγματικό unique index** (`lower(display_name)`, partial όπου `is not null`) — η ίδια η Postgres εγγυάται τη μοναδικότητα, instant lookup, ΚΑΝΕΝΑ race condition δυνατό. Η `check_own_display_name_available()` έγινε τετριμμένη (`language sql`, ΚΑΜΙΑ Vault/pgcrypto εμπλοκή). Η χειροκίνητη "if exists... raise exception" λογική μέσα στο `set_own_fan_full_profile` **αφαιρέθηκε εντελώς** (ρητό αίτημα: "αφαίρεσε περιττές συναρτήσεις") — σε σπάνιο race, η ίδια η update αποτυγχάνει φυσικά με `unique_violation` (code `23505`), που πιάνει ο client (`onError` στο mutate, `FanProfileRoute.jsx`) και δείχνει το ίδιο κόκκινο μήνυμα. Debounce του live check μειώθηκε 500ms→300ms (πιο άμεσο feedback, τώρα που ο έλεγχος είναι φθηνός). Ενημερώθηκε ΚΑΙ το `concerto-forms-and-encryption-brief.md` (η ενότητα "μοναδικότητα σε encrypted πεδίο" ΔΕΝ ισχύει πια για το display_name — παραμένει ως γενικό πρότυπο για ΑΛΛΑ πεδία που ΘΑ χρειαστεί να μείνουν κρυπτογραφημένα).
+
+### (Ιστορικό, πριν την παραπάνω αναθεώρηση) Δύσκολο τεχνικό σημείο: μοναδικότητα σε ΚΡΥΠΤΟΓΡΑΦΗΜΕΝΟ πεδίο
+Το `display_name` είναι encrypted (`pgp_sym_encrypt`) — η pgcrypto προσθέτει τυχαιότητα σε κάθε encryption, άρα ΔΕΝ γίνεται SQL `unique` constraint ή απλή `where encrypted_col = ...` σύγκριση πάνω στη encrypted στήλη (ποτέ δύο encryptions του ίδιου plaintext δεν είναι bit-for-bit ίδιες). Εξετάστηκε και απορρίφθηκε η λύση "plain/hashed lookup column" (θα "πρόδιδε" μερικώς το display name σε κάποιον που διαβάζει τη βάση — έρχεται σε αντίθεση με το "όλα κρυπτογραφημένα" που είχε ήδη αποφασιστεί). Επιλέχθηκε: νέα function `check_own_display_name_available()` που αποκρυπτογραφεί ΟΛΕΣ τις γραμμές server-side και συγκρίνει σε plaintext ΜΕΣΑ στη function — αποδεκτό στο μέγεθος του project τώρα, σημειώθηκε ως μελλοντικό scaling TODO (βλ. `concerto-forms-and-encryption-brief.md`) αν το fanbase μεγαλώσει πολύ.
+
+### Υλοποίηση
+**Migration `20260909130000_fan_profile_multi_tenant_and_display_name_check.sql`:** `favorite_tenant_id` (uuid) → `favorite_tenant_ids` (uuid[]) στο `fans` (backfill+drop το παλιό)· νέα `check_own_display_name_available(p_display_name)` (live check από το UI)· `get/set_own_fan_full_profile` ενημερώθηκαν (νέο return type/param, χρειάστηκε `drop function` πρώτα — η `create or replace` δεν επιτρέπει αλλαγή signature)· το `set_own_fan_full_profile` ΞΑΝΑελέγχει τη μοναδικότητα server-side πριν το save (defense in depth against races — το client-side live check είναι best-effort/UX μόνο).
+
+**Client:**
+```
+src/lib/phoneCountries.js                              → λίστα χωρών+κωδικών, Ελλάδα default
+src/components/Concerto/FanDashboard/FavoriteTenantsPicker.jsx → custom searchable multi-select (checkboxes), πηγή useFanTenants (ΟΧΙ πια useAllTenants.js — διαγράφηκε, orphaned)
+```
+`fanProfileSchema.js`: `favoriteTenantId` → `favoriteTenantIds` (array)· νέα `phoneCountry`/`phoneNumber` (συνδυάζονται σε ένα string στο submit)· νέο exported `capitalizeFirst()` helper· `.transform()` στο τέλος του schema εφαρμόζει capitalize και σε submit-time (defense in depth πάνω από το live onChange transform στο UI).
+`FanProfileRoute.jsx`: **πλήρης επανασχεδίαση της ροής.** `useWatch({ control })` (ΟΧΙ `watch()` απευθείας — React Compiler warning "cannot be memoized safely", `useWatch` είναι το official recommended equivalent) τροφοδοτεί το FanIdCard LIVE, ασχέτως αν είναι ανοιχτό το edit panel (το form state μένει πάντα synced με τη βάση μέσω του υπάρχοντος `reset()` effect — έξυπνη παρατήρηση: δεν χρειάστηκε ξεχωριστό "live vs saved" state, το `watch`/`useWatch` ΕΙΝΑΙ ήδη η πηγή αλήθειας). Save → `setEditOpen(false)` στο `onSuccess` του mutate. Κεφαλαιοποίηση: `register(..., { onChange: (e) => { e.target.value = capitalizeFirst(e.target.value) } })` — τυπικό react-hook-form transform pattern (μεταλλάσσει το `e.target.value` πριν το διαβάσει το ίδιο το RHF, δουλεύει επειδή τα δικά μας `Input` δεν είναι forwardRef-wrapped—React 19 περνάει `ref` σαν κανονικό prop).
+
+### 🐛 Lint fix: `react-hooks/set-state-in-effect` (ξανά, ίδια οικογένεια προβλήματος με το παλιό FanProfileRoute fix)
+Το live debounced display-name check έκανε αρχικά `setState` ΣΥΓΧΡΟΝΙΣΜΕΝΑ μέσα στο σώμα του effect (πριν καν το `setTimeout`) — flagged. **Λύση:** το "checking"/"idle" status έγινε **derived τιμή** (υπολογίζεται στο render, όχι state) από `editOpen`+τρέχον/αρχικό display name· το ΜΟΝΟ πραγματικό `setState` έμεινε ΜΕΣΑ στο `setTimeout` callback (ασύγχρονο, "κλειδωμένο" στη συγκεκριμένη τιμή που ελέγχθηκε, ώστε να μη δείχνει ποτέ stale αποτέλεσμα από προηγούμενο πληκτρολόγημα).
+
+### Verification
+`npx eslint .` + `npm run build` καθαρά (μόνο τα ίδια 13 pre-existing errors σε `ui/*.jsx`). **Δεν έχει γίνει live browser verification ακόμα** (εκκρεμεί το migration).
 
 ---
 

@@ -1,5 +1,6 @@
 import { useOutletContext } from "react-router-dom"
 import { useFanFavoriteEvents } from "../../../queries/useFanFavoriteEvents"
+import { crossTenantHref } from "../../../lib/tenantLink"
 
 function formatEventDate(dateString) {
   if (!dateString) return ""
@@ -38,7 +39,7 @@ export default function FanFavoriteEventsRoute() {
                   // Πλήρες, cross-origin href — ίδιο σκεπτικό με
                   // FanFavoriteMerchRoute.jsx.
                   <a
-                    href={`//${item.domain}/events/event/${item.eventId}`}
+                    href={crossTenantHref(item.domain, `/events/event/${item.eventId}`)}
                     className="truncate text-sm font-semibold text-gray-900 hover:underline"
                   >
                     {item.title}

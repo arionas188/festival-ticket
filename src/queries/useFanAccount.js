@@ -1,44 +1,32 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { supabase } from "../lib/supabase"
 
-// Το προφίλ του fan όπως είναι ΑΠΟΘΗΚΕΥΜΕΝΟ στη βάση (fans table) — όχι το
-// Google user_metadata απευθείας, γιατί μετά την πρώτη επεξεργασία μπορεί
-// να διαφέρουν σκόπιμα (βλ. profile_customized, syncFanFromAuth.js).
-// Χρησιμοποιείται και από το ConcertoBar (badge/κόκκινο "Προφίλ") και από
-// το FanProfileRoute (φόρμα).
+// Το προφίλ του fan όπως είναι ΑΠΟΘΗΚΕΥΜΕΝΟ στη βάση — μέσω RPC
+// (get_own_fan_identity), γιατί το full_name/avatar_url είναι
+// κρυπτογραφημένα στο fan_private_details, όχι plain στήλες στο fans.
+// full_name/avatar_url εδώ ΑΥΤΟΜΑΤΑ συγχρονισμένα από το Google
+// (syncFanFromAuth.js, σε κάθε login) — ΞΕΧΩΡΙΣΤΑ από τα πραγματικά
+// first_name/last_name/display_name που ορίζει ο ίδιος ο fan μέσω της
+// πλήρους φόρμας (βλ. useFanFullProfile.js). Χρησιμοποιείται από το
+// ConcertoBar (badge/κόκκινο "Προφίλ", μέσω profile_customized) και το
+// FanProfileRoute (avatar στο FanIdCard, κόκκινο banner).
+//
+// Το write path (useUpdateFanProfile / set_own_fan_full_name) αφαιρέθηκε
+// (9/9) — αντικαταστάθηκε από useUpdateFanFullProfile
+// (set_own_fan_full_profile), μία ενιαία save για ΟΛΗ τη φόρμα προφίλ.
+// Η function set_own_fan_full_name παραμένει στη βάση (καμία βλάβη),
+// απλά δεν την καλεί πια ο client.
 export function useFanAccount(fanId) {
   return useQuery({
     queryKey: ["fan_account", fanId],
     queryFn: async () => {
-      // maybeSingle, όχι single: στο ΠΡΩΤΟ login ενός νέου fan υπάρχει race
-      // με το fans upsert (syncFanFromAuth.js, μέσω useFanSession.js στο
-      // Header) — το row μπορεί να μην υπάρχει ακόμα τη στιγμή που φορτώνει
-      // το ConcertoBar. null είναι έγκυρη, αναμενόμενη απάντηση εδώ, όχι σφάλμα.
-      const { data, error } = await supabase
-        .from("fans")
-        .select("full_name, avatar_url, profile_customized")
-        .eq("id", fanId)
-        .maybeSingle()
+      // Η RPC επιστρέφει 0 γραμμές αν δεν υπάρχει ακόμα fans row (πρώτο
+      // login, sync σε εξέλιξη) — [0] ?? null διατηρεί το maybeSingle-like
+      // null εδώ.
+      const { data, error } = await supabase.rpc("get_own_fan_identity")
       if (error) throw error
-      return data
+      return data?.[0] ?? null
     },
     enabled: !!fanId,
-  })
-}
-
-export function useUpdateFanProfile(fanId) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ fullName }) => {
-      const { error } = await supabase
-        .from("fans")
-        .update({ full_name: fullName, profile_customized: true })
-        .eq("id", fanId)
-      if (error) throw error
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["fan_account", fanId] })
-    },
   })
 }
