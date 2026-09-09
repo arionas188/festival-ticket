@@ -699,6 +699,12 @@ src/queries/useFanPrivateDetails.js   → useFanPrivateDetails(fanId) + useUpdat
 
 ---
 
+## ⚠️ Αναίρεση: sticky ID card + live preview (9/9, μετά από πραγματικό build test)
+
+Ο χρήστης δοκίμασε σε πραγματικό build και βρήκε πρόβλημα με το sticky ID card + το live preview (watch()-based) που είχαν προστεθεί στο προηγούμενο πέρασμα — ζήτησε ρητά να αναιρεθούν και να γυρίσει "όπως πριν": το ID card ΔΕΝ είναι πια sticky (κανονική ροή στη σελίδα), και δείχνει ΜΟΝΟ τα αποθηκευμένα δεδομένα (`fullProfile` από τη βάση) — ενημερώνεται ΜΟΝΟ μετά από επιτυχές save, ΟΧΙ live καθώς πληκτρολογεί ο fan. Το `useWatch`/live-preview παρέμεινε σε χρήση ΜΟΝΟ για το live display-name-availability check και το "θα αποθηκευτεί ως..." τηλεφώνου ΜΕΣΑ στη φόρμα (αυτά δεν αναιρέθηκαν, ο χρήστης αναφέρθηκε ρητά μόνο στο ID card). `FanProfileRoute.jsx` ενημερώθηκε· `npx eslint`/`npm run build` καθαρά.
+
+---
+
 ## Επέκταση encryption σε ΟΛΑ τα προσωπικά πεδία (email/full_name/avatar_url) — 9/9
 
 ### Ζητήθηκε

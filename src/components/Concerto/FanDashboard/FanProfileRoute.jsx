@@ -176,26 +176,20 @@ export default function FanProfileRoute() {
         </p>
       )}
 
-      {/* Sticky: μένει ορατή στο πάνω μέρος της οθόνης καθώς ο fan κάνει
-          scroll στη (μεγάλη, μεγαλώνει κι άλλο) φόρμα από κάτω — ρητό
-          αίτημα χρήστη. top-24 (ΟΧΙ top-4) στο mobile: υπάρχουν ΔΥΟ sticky
-          headers από πάνω (TenantChip row + "Ο λογαριασμός μου" row, βλ.
-          FanDashboardLayout.jsx, z-40) — χωρίς αρκετό offset το ID card
-          "χώνεται" κάτω από αυτά καθώς κάνεις scroll (ρητά αναφέρθηκε από
-          τον χρήστη με screenshot). Στο desktop (lg+) το mobile header
-          είναι κρυφό, οπότε μικρότερο offset αρκεί εκεί. z-10 (κάτω από
-          το 40 του header) ώστε το header να μένει πάντα από πάνω σε τυχόν
-          επικάλυψη. Live: τα values έρχονται από watch(), αλλάζουν σε
-          πραγματικό χρόνο καθώς πληκτρολογεί, ΟΧΙ μόνο μετά το save. */}
-      <div className="sticky top-24 z-10 bg-white pb-4 lg:top-4">
+      {/* ΟΧΙ πια sticky, ΟΧΙ πια live preview (και τα δύο δοκιμάστηκαν σε
+          πραγματικό build και είχαν πρόβλημα — ρητό αίτημα χρήστη να
+          αναιρεθούν, γυρίζει στο "όπως πριν": το ID card δείχνει ΜΟΝΟ τα
+          αποθηκευμένα δεδομένα (fullProfile), ενημερώνεται ΜΟΝΟ μετά από
+          επιτυχές save — όχι καθώς πληκτρολογεί ο fan). */}
+      <div className="pb-4">
         <FanIdCard
           fan={fan}
           idNumber={idNumber}
-          dateOfBirth={liveValues.dateOfBirth}
-          city={liveValues.city}
-          firstName={liveValues.firstName}
-          lastName={liveValues.lastName}
-          displayName={liveValues.displayName}
+          dateOfBirth={fullProfile?.date_of_birth}
+          city={fullProfile?.city}
+          firstName={fullProfile?.first_name}
+          lastName={fullProfile?.last_name}
+          displayName={fullProfile?.display_name}
         />
       </div>
 
