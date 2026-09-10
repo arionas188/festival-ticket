@@ -89,7 +89,7 @@ export default function Header({ tenant, settings, onRequireAuth }) {
       <img
         alt=""
         src={tenantCover}
-        className="h-40 w-full rounded-b-2xl object-cover object-[50%_35%] sm:h-64 sm:w-2/3 sm:mx-auto"
+        className="h-32 w-full rounded-b-2xl object-cover object-[50%_35%] sm:h-64 sm:w-2/3 sm:mx-auto"
       />
 
       <div className="mx-auto max-w-md px-4 sm:max-w-2xl">

@@ -1,5 +1,4 @@
 import { useOutletContext } from "react-router-dom"
-import TenantAbout from "./TenantAbout"
 import BandMembers from "./BandMembers"
 import LocationGallery from "./LocationGallery"
 import { useBandMembers } from "../../queries/useBandMembers"
@@ -31,10 +30,7 @@ export default function InfoRoute() {
         </p>
       )}
       {tenantType === "artist" && (
-        <>
-          <TenantAbout />
-          <BandMembers members={members} />
-        </>
+        <BandMembers members={members} />
       )}
       {(tenantType === "venue" || tenantType === "festival") && (
         <LocationGallery photos={galleryUrls} />

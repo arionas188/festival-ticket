@@ -458,6 +458,89 @@ values (
 ### ✅ Δεύτερο tenant (Athens Rock) — ολοκληρώθηκε
 Athens Rock Festival έχει πλέον δικό του domain στο `tenant_domains` και δουλεύει κανονικά, live-verified πολλές φορές κατά τη διάρκεια του React Router/Fan Dashboard work (βλ. `concerto-react-router-brief.md`) — π.χ. cross-tenant favorites/cart isolation test έγινε ακριβώς Villagers ↔ Athens Rock.
 
+### ✅ Τρίτο tenant (ΣΤΡΑΦΙ) — ολοκληρώθηκε, live-verified (10/9)
+
+Ο χρήστης ζήτησε τρίτο, πραγματικό tenant "για διασκέδαση" — επιβεβαιώνει ξανά το white-label promise (μηδέν νέος κώδικας, μόνο νέες γραμμές). type='artist' (μπάντα, όπως Villagers), slug 'strafi' → `strafi.concerto.gr`. Δούλεψε στην πράξη — τρίτο tenant, μηδέν νέος κώδικας πέρα από ένα `allowedHosts` entry, ακριβώς όπως το Athens Rock.
+
+Έγινε ήδη: `vite.config.js` `allowedHosts` πήρε το `strafi.concerto.gr`.
+
+**Έγινε από τον χρήστη** (μικρό πρόσκομμα στην πορεία: πρώτη φορά έβαλε `http://strafi.concerto.gr:5173/` στο `/etc/hosts` αντί για `127.0.0.1 strafi.concerto.gr` — το /etc/hosts θέλει μόνο IP+hostname, όχι URL· διορθώθηκε, δούλεψε) (χρειάζεται δικό του Supabase login — το anon key της εφαρμογής δεν έχει write permission σε tenants/tenant_domains/tenant_settings, ΕΠΙΤΗΔΕΣ, μόνο public read):
+```sql
+insert into tenants (name, slug, type)
+values ('ΣΤΡΑΦΙ', 'strafi', 'artist');
+
+insert into tenant_domains (tenant_id, domain, type)
+values (
+  (select id from tenants where slug = 'strafi'),
+  'strafi.concerto.gr',
+  'subdomain'
+);
+
+insert into tenant_settings (
+  tenant_id, display_name, logo_url, cover_image_url,
+  primary_color, secondary_color, bio, category_label
+)
+values (
+  (select id from tenants where slug = 'strafi'),
+  'ΣΤΡΑΦΙ',
+  'https://placehold.co/200x200/1f2937/ffffff?text=STRAFI',
+  'https://placehold.co/1200x400/1f2937/ffffff?text=STRAFI',
+  '#1f2937',
+  '#f97316',
+  'Σύντομα εδώ η ιστορία των ΣΤΡΑΦΙ.',
+  'Μουσικό Συγκρότημα'
+);
+```
+Placeholder εικόνες (placehold.co, πραγματικά functional URLs, όχι σπασμένα links) — ο χρήστης τα αλλάζει αργότερα μόνος του (upload στο `tenant-assets` bucket, UPDATE στο `tenant_settings`).
+
+Χρειάζεται ΚΑΙ `/etc/hosts` entry στο Mac του χρήστη (`127.0.0.1 strafi.concerto.gr`, ίδιο pattern με villagers/athensrock) — δεν μπορεί να γίνει από τον AI assistant (system file, εκτός scope των εργαλείων/κανόνων).
+
+**Update (10/9) — πραγματικό bio μπήκε.** Ο χρήστης έστειλε το πραγματικό bio κειμένο
+(ιστορία, μέλη Billy/Θάνος/Λάμπρος, δισκογραφία, live εμφανίσεις) + το πραγματικό λογότυπο.
+Το bio μπήκε με `UPDATE tenant_settings SET bio = ... WHERE tenant_id = (select id from tenants
+where slug = 'strafi')` (ο χρήστης το έτρεξε στο δικό του Supabase SQL editor — το anon key
+δεν έχει write permission, επίτηδες).
+
+Στην πορεία εντοπίστηκε πραγματικό bug: το `InfoRoute.jsx` έκανε unconditional render ενός
+`<TenantAbout />` component για ΚΑΘΕ tenant τύπου 'artist' — αλλά το `TenantAbout.jsx` είχε
+hardcoded, άσχετο περιεχόμενο (ιστορία μιας φανταστικής μπάντας "Μωρά στη Φωτιά") που εμφανιζόταν
+κάτω από το πραγματικό bio σε ΚΑΘΕ artist tenant — δηλαδή και στο live Villagers site, όχι μόνο
+στο ΣΤΡΑΦΙ. Επιβεβαιώθηκε με grep ότι το `TenantAbout` δεν χρησιμοποιείται πουθενά αλλού, άρα
+αφαιρέθηκε με ασφάλεια από το `InfoRoute.jsx` (και το import του). Το αρχείο `TenantAbout.jsx`
+έμεινε στο δίσκο αχρησιμοποίητο (μπορεί να διαγραφεί χειροκίνητα όποτε βολεύει).
+
+Λογότυπο: ο χρήστης έστειλε την πραγματική εικόνα (547×365, ορθογώνιο σχήμα banner) — ταιριάζει
+καλά για `cover_image_url`, αλλά θα κοπεί στα πλάγια αν χρησιμοποιηθεί ως `logo_url` σε κυκλικά
+avatar contexts. Ο χρήστης πρέπει να το ανεβάσει ο ίδιος στο Supabase Storage bucket
+`tenant-assets` (το app key δεν έχει write permission σε Storage) και να δώσει το public URL
+πίσω για να μπει σε `logo_url`/`cover_image_url`. **Update (10/9):** ο χρήστης ανέβασε ξεχωριστό
+τετράγωνο `strafi-logo.png` (καλό fit για κυκλικά avatar contexts) ΚΑΙ `staff-cover.png`
+(ορθογώνιο banner) στο bucket `tenant-assets/strafi/` — άρα μπήκαν σωστά, χωρίς crop
+compromise, και τα δύο πεδία `logo_url`/`cover_image_url`.
+
+**Update (10/9) — merch, δοκιμαστικά δεδομένα.** Ο χρήστης ανέβασε 7 πραγματικές εικόνες
+προϊόντων στο `tenant-assets/strafi/products/` (3 t-shirt, 4 βινύλια) και ζήτησε να μπουν
+test data (τιμές/stock/περιγραφές placeholder) σήμερα, με πραγματικά στοιχεία να μπουν
+αύριο. Έγιναν 7 `INSERT INTO products` rows (3 `clothing` @ €20, 4 `music` @ €25-28,
+stock 10-15, SKU pattern `STRAFI-<TS|VL>-<name>`, `sort_order` 1-7) — ονόματα βινυλίων
+εικασμένα από filename (Επίθεση/Πάνω απ' τα Χώματα/Παραδομένη στη Γιορτή/το ομώνυμο
+ντεμπούτο) γιατί δεν δόθηκαν ρητά ακόμα, ΘΑ ΕΠΙΒΕΒΑΙΩΘΟΥΝ/διορθωθούν αύριο μαζί με τα
+πραγματικά στοιχεία. `slug` auto-generated από το υπάρχον DB trigger, δεν χρειάστηκε να
+δοθεί χειροκίνητα.
+
+**Update (10/9) — bug βρέθηκε από τον χρήστη, διορθώθηκε: κενές κατηγορίες merch.**
+Το `useMerchCategories.js` έχτιζε ΠΑΝΤΑ 4 σταθερές κατηγορίες (New/Ρουχισμός/CD&Βινύλια/
+Διάφορα) ανεξάρτητα από το αν υπήρχε έστω 1 προϊόν μέσα — το `CategoryGrid` τις έδειχνε
+όλες σαν clickable πλακίδια, οπότε μια κενή κατηγορία (π.χ. ΣΤΡΑΦΙ δεν έχει ακόμα "Διάφορα")
+εμφανιζόταν σαν άδειο πλακίδιο χωρίς εικόνα που οδηγούσε σε κενή σελίδα. Διορθώθηκε με ένα
+`.filter((cat) => cat.items.length > 0)` στο τέλος του υπολογισμού — global fix, αφορά
+όλα τα tenants, όχι μόνο ΣΤΡΑΦΙ. Το `MerchCategoryRoute.jsx` είχε ήδη defensive handling
+για "κατηγορία δεν βρέθηκε" (direct URL σε άδεια/ανύπαρκτη κατηγορία), άρα καμία άλλη
+αλλαγή δεν χρειάστηκε.
+
+
+
+
 ---
 
 ## 📍 ΠΟΥ ΒΡΙΣΚΟΜΑΣΤΕ ΤΩΡΑ (σύνοψη)
@@ -632,6 +715,69 @@ src/components/Header/
 11. BandInfo περιεχόμενο, Incentives (merch).
 12. **Απομάκρυνση localStorage προσωρινής λύσης** ("Σύνδεση" vs "Ακολούθησε") όταν χτιστεί το SSO bridge — δεν είναι επείγον, το SSO bridge είναι ρητά αναβεβλημένο.
 13. Μελλοντικά: Αριθμημένα tickets, ticket resale marketplace, QR validation, ConcertoGlobalBar (Phase 2), custom domains + SSO bridge (ρητά ΟΧΙ πριν το launch — βλ. business brief).
+
+## ⚠️ Πιθανό bug προς έλεγχο (10/9) — 401 στο `sync_own_fan_from_auth`
+
+Ο χρήστης είδε στο browser console:
+```
+POST .../rest/v1/rpc/sync_own_fan_from_auth 401 (Unauthorized)
+```
+Μονή, μη αναπαραγόμενη εμφάνιση — δεν θυμάται ακριβώς τι έκανε τη στιγμή εκείνη, καμία
+ορατή συνέπεια στη σελίδα δεν αναφέρθηκε (δεν κόλλησε κάπου, δεν έδειξε error state).
+
+**Πιθανή εξήγηση (όχι επιβεβαιωμένη ακόμα):** Το session αποθηκεύεται σε cookie
+(`src/lib/cookieStorage.js`, Domain=.concerto.gr, για SSO ανάμεσα σε subdomains). Το
+Supabase client κάνει auto-refresh του access token, αλλά browsers "παγώνουν" timers σε
+background tabs — αν ένα tab μείνει ανοιχτό αρκετή ώρα χωρίς focus, το πρώτο request μετά
+την επιστροφή focus μπορεί να φύγει με ήδη ληγμένο token πριν προλάβει το auto-refresh.
+Το `sync_own_fan_from_auth` RPC έχει ΣΚΟΠΙΜΑ `grant ... to authenticated` / `revoke ... from
+anon` (migration `20260909110000_encrypt_all_fan_personal_fields.sql`) — άρα ένα expired/
+άκυρο token εκεί δίνει ακριβώς 401, όχι κάτι σπασμένο στο permission setup.
+
+**Γιατί πιθανώς δεν χρειάζεται επέμβαση:** το `useFanSession` το καλεί μέσα από React
+Query `useQuery` με το **default `retry: 3`** (`new QueryClient()` χωρίς custom retry
+config στο `main.jsx`) — δηλαδή αυτόματα ξαναδοκιμάζει 2-3 φορές με αυξανόμενη καθυστέρηση,
+χρόνος αρκετός συνήθως για να προλάβει το Supabase client να κάνει refresh το token μόνο
+του. Πιθανότατα self-healing, invisible στον χρήστη.
+
+**Προς έλεγχο αύριο:**
+- Αν ξανασυμβεί, σημείωσε ΤΙ έκανε ο χρήστης ακριβώς πριν (tab πόση ώρα ήταν background,
+  ήταν μόλις μετά από sign in/out, πολλά tabs/subdomains ταυτόχρονα).
+- Αν παρατηρηθεί κάποτε ΟΡΑΤΗ συνέπεια (π.χ. κολλημένο "φόρτωση...", account section να μη
+  φορτώνει, favorites/cart/search να μη δουλεύουν στιγμιαία) — τότε είναι πραγματικό bug,
+  όχι απλά transient race, και χρειάζεται πραγματικό fix (π.χ. explicit
+  `supabase.auth.refreshSession()` πριν το RPC, ή guard στο `useFanSession` να περιμένει
+  valid session πριν κάνει call).
+- Δεν έγινε καμία code αλλαγή ακόμα γι' αυτό — καθαρά παρατήρηση/διάγνωση, εν αναμονή
+  επιβεβαίωσης.
+
+---
+
+## ⚠️ Προσωρινή κατάσταση: `concertofamily.netlify.app` δείχνει ΣΤΡΑΦΙ, ΟΧΙ Villagers (10/9)
+
+Ο χρήστης ζήτησε να δει το ΣΤΡΑΦΙ live στο Netlify για τον συνεργάτη του. Επιλέχθηκε η
+γρήγορη λύση (εναλλαγή στο ίδιο, υπάρχον URL) αντί για δεύτερο ξεχωριστό Netlify site —
+δηλαδή η μία υπάρχουσα γραμμή στο `tenant_domains` (domain = `concertofamily.netlify.app`)
+άλλαξε `tenant_id` από Villagers σε ΣΤΡΑΦΙ. **Το Villagers ΔΕΝ φαίνεται πια σε αυτό το URL
+όσο ισχύει αυτή η αλλαγή.**
+
+SQL που δόθηκε στον χρήστη (μη ξεχαστεί ότι ίσως χρειαστεί rollback):
+```sql
+UPDATE tenant_domains
+SET tenant_id = (SELECT id FROM tenants WHERE slug = 'strafi')
+WHERE domain = 'concertofamily.netlify.app';
+```
+Για επαναφορά στο Villagers:
+```sql
+UPDATE tenant_domains
+SET tenant_id = (SELECT id FROM tenants WHERE slug = 'villagers')
+WHERE domain = 'concertofamily.netlify.app';
+```
+Αν το AI assistant σε επόμενο session δει ότι το `concertofamily.netlify.app` δείχνει
+ΣΤΡΑΦΙ αντί Villagers, αυτός είναι ο λόγος — δεν είναι bug, είναι σκόπιμη, ενεργή
+επιλογή του χρήστη εν αναμονή επαναφοράς.
+
+---
 
 ---
 

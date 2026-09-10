@@ -14,6 +14,9 @@ export function useMerchCategories(tenantId) {
   const categories = useMemo(() => {
     const all = products || []
 
+    // Μόνο κατηγορίες με τουλάχιστον 1 προϊόν — αλλιώς ένα tenant χωρίς
+    // π.χ. "Διάφορα" προϊόντα θα έδειχνε ένα άδειο, χωρίς εικόνα πλακίδιο
+    // στο CategoryGrid που οδηγεί σε κενή σελίδα κατηγορίας.
     return [
       {
         key: "new",
@@ -35,7 +38,7 @@ export function useMerchCategories(tenantId) {
         title: "Διάφορα",
         items: all.filter((p) => p.category === "various"),
       },
-    ]
+    ].filter((cat) => cat.items.length > 0)
   }, [products])
 
   return { products, categories, isLoading, error }

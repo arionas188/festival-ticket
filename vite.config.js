@@ -12,6 +12,6 @@ export default defineConfig({
   },
   server: {
     host: true,
-    allowedHosts: ["villagers.concerto.gr", "athensrock.concerto.gr"],
+    allowedHosts: ["villagers.concerto.gr", "athensrock.concerto.gr", "strafi.concerto.gr"],
   },
 })
