@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { Link, useLocation, useNavigate } from "react-router-dom"
+import { useState } from "react"
+import { Link } from "react-router-dom"
 import { UserCircleIcon } from "@heroicons/react/24/solid"
 import {
   DropdownMenu,
@@ -29,31 +29,14 @@ import DeleteAccountDialog from "./DeleteAccountDialog"
 // (μέσω Header → Outlet context → child routes).
 export default function ConcertoBar({ authOpen, onAuthOpenChange }) {
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
-  const { user, isLoggedIn, isLoading: authLoading } = useAuth()
+  const { user, isLoggedIn } = useAuth()
   const avatarUrl = user?.user_metadata?.avatar_url
-  const location = useLocation()
-  const navigate = useNavigate()
 
-  // Bug (8/9): μετά από sign out (απλή αποσύνδεση Ή διαγραφή λογαριασμού —
-  // useDeleteAccount.js καταλήγει κι αυτή σε signOut) ενώ ο fan ήταν μέσα
-  // στο /account, η σελίδα έμενε "κολλημένη" εκεί χωρίς session (το Fan
-  // Dashboard χρειάζεται fan session, δεν έχει tenant chrome να πέσει πίσω).
-  // Λύση, "για αρχή" μέχρι να υπάρχει πραγματικό κεντρικό
-  // concerto.gr/concertofamily.gr όπου θα ανήκουν όλα τα tenants (τότε θα
-  // γίνει redirect εκεί αντί για /about): reactive guard σε ΚΑΘΕ μονοπάτι
-  // που καταλήγει σε sign out, όχι μόνο στο κουμπί "Αποσύνδεση" — γυρνάει
-  // στο /about του tenant subdomain που ήδη είσαι.
-  //
-  // authLoading: κρίσιμο — το useAuth() ξεκινάει με session=undefined
-  // (isLoggedIn=false) μέχρι να επιβεβαιωθεί το πραγματικό session. Χωρίς
-  // αυτόν τον έλεγχο, ένας ΗΔΗ συνδεδεμένος fan που ανοίγει απευθείας
-  // /account/... θα έκανε redirect στο /about πριν προλάβει να επιβεβαιωθεί
-  // το session του — false positive, live-confirmed bug.
-  useEffect(() => {
-    if (!authLoading && !isLoggedIn && location.pathname.startsWith("/account")) {
-      navigate("/about")
-    }
-  }, [authLoading, isLoggedIn, location.pathname, navigate])
+  // Το ConcertoBar πλέον ΔΕΝ ρεντεράρεται καθόλου μέσα στο Fan Dashboard
+  // (/account) — βλ. App.jsx. Το reactive guard "μη συνδεδεμένος fan στο
+  // /account → πίσω στο /about" που ζούσε εδώ μετακινήθηκε στο ίδιο το
+  // FanDashboardLayout.jsx (πιο φυσική θέση — ζει δίπλα στο route που
+  // προστατεύει, βλ. concerto-react-router-brief.md, "Sidebar v6").
 
   // Οδηγεί το κόκκινο badge "1" στο avatar + το κόκκινο "Προφίλ" στο
   // dropdown παρακάτω — βλ. useFanAccount.js/FanProfileRoute.jsx για το

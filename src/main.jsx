@@ -18,6 +18,7 @@ import FanTenantsRoute from './components/Concerto/FanDashboard/FanTenantsRoute.
 import FanFavoriteMerchRoute from './components/Concerto/FanDashboard/FanFavoriteMerchRoute.jsx'
 import FanFavoriteEventsRoute from './components/Concerto/FanDashboard/FanFavoriteEventsRoute.jsx'
 import FanOrdersRoute from './components/Concerto/FanDashboard/FanOrdersRoute.jsx'
+import FanCurrentCartRoute from './components/Concerto/FanDashboard/FanCurrentCartRoute.jsx'
 import ErrorPage from './components/ErrorPage/ErrorPage.jsx'
 
 const queryClient = new QueryClient()
@@ -81,6 +82,7 @@ const router = createBrowserRouter([
           { path: 'merch', element: <FanFavoriteMerchRoute /> },
           { path: 'events', element: <FanFavoriteEventsRoute /> },
           { path: 'orders', element: <FanOrdersRoute /> },
+          { path: 'cart', element: <FanCurrentCartRoute /> },
         ],
       },
     ],

@@ -801,6 +801,158 @@ src/components/Concerto/FanDashboard/FavoriteTenantsPicker.jsx → custom search
 ### Verification
 `npx eslint .` + `npm run build` καθαρά (μόνο τα ίδια 13 pre-existing errors σε `ui/*.jsx`). **Δεν έχει γίνει live browser verification ακόμα** (εκκρεμεί το migration).
 
+
+## Sidebar component (shadcn) — πραγματικό πηγαίο κώδικας, όχι improvisation
+
+Ο χρήστης ζήτησε να χρησιμοποιηθεί το πραγματικό sidebar component του shadcn (https://ui.shadcn.com/docs/components/radix/sidebar) ως βάση, να προσαρμοστεί στις ανάγκες του project — ΟΧΙ να ξαναγραφτεί from scratch (όπως έγινε νωρίτερα για το `select.jsx`, λόγω αδυναμίας του `npx shadcn add` να συνδεθεί με το ui.shadcn.com από το δίκτυο της συσκευής).
+
+**Νέα ανακάλυψη:** το `WebFetch` tool (δίκτυο του cloud container, διαφορετικό path από το device_bash) ΜΠΟΡΕΙ να φτάσει το ui.shadcn.com, ΣΥΜΠΕΡΙΛΑΜΒΑΝΟΜΕΝΩΝ των raw registry JSON endpoints (`https://ui.shadcn.com/r/styles/radix-nova/<component>.json`) — επιστρέφουν τον πλήρη, πραγματικό πηγαίο κώδικα TSX. Άρα από εδώ και πέρα, για οποιοδήποτε shadcn component χρειαστεί το project: WebFetch το raw JSON registry endpoint → πάρε το ΠΡΑΓΜΑΤΙΚΟ source → προσάρμοσέ το χειροκίνητα στις συμβάσεις του project — όχι hand-improvised εκδοχή.
+
+**Fetched (μέσω WebFetch, style "radix-nova" — ίδιο με το `components.json` του project):**
+- `sidebar.json` → sidebar.tsx (~20 sub-components + `useSidebar` hook)
+- `tooltip.json` → tooltip.tsx (dependency, ΔΕΝ υπήρχε ακόμα στο project)
+- `skeleton.json` → skeleton.tsx (dependency, ΔΕΝ υπήρχε ακόμα)
+- `use-mobile.json` → use-mobile.ts hook (dependency, ΔΕΝ υπήρχε ακόμα)
+
+**Προσαρμογές κατά τη μεταφορά (χειροκίνητα, από το πραγματικό source):**
+- Αφαιρέθηκαν όλα τα TypeScript types (ίδιο ύφος με τα υπόλοιπα `ui/*.jsx`)
+- `import { cn } from "cn"` → `import { cn } from "@/lib/utils"`
+- Εσωτερικά imports (`@/registry/radix-nova/ui/...`) → `@/components/ui/...`
+- `@/registry/radix-nova/hooks/use-mobile` → `@/hooks/useIsMobile` (project convention: hooks σε `src/hooks/`, camelCase filename όπως `useAuth.js`/`useMerchCategories.js`)
+- Το `SidebarTrigger` χρησιμοποιούσε `IconPlaceholder` (site-specific abstraction του shadcn docs site) — αντικαταστάθηκε με απλό `PanelLeftIcon` από `lucide-react` (ίδιο pattern με τα υπόλοιπα `ui/*.jsx`, π.χ. `dropdown-menu.jsx`)
+- `useIsMobile`: γράφτηκε με `useSyncExternalStore` αντί για το αρχικό `useState`+`useEffect`+συγχρονισμένο `setState` — official React pattern ακριβώς για sync με browser API (matchMedia), αποφεύγει καθαρά το `react-hooks/set-state-in-effect` lint error (ίδια οικογένεια προβλήματος με το παλιό FanProfileRoute fix, εδώ λύθηκε με καλύτερο pattern αντί για workaround)
+- Επιβεβαιώθηκαν όλα τα registryDependencies: `button`, `separator`, `sheet`, `input` (ήδη στο project)· `tooltip`, `skeleton`, `use-mobile` (νέα)
+- Επιβεβαιώθηκε ότι τα CSS custom properties `--sidebar*` υπάρχουν ΗΔΗ στο `src/index.css` (light+dark) — καμία αλλαγή CSS δεν χρειάστηκε
+
+**Νέα αρχεία:**
+```
+src/hooks/useIsMobile.js
+src/components/ui/tooltip.jsx
+src/components/ui/skeleton.jsx
+src/components/ui/sidebar.jsx
+```
+
+### Verification
+`npx eslint` στα 4 νέα αρχεία: καθαρό εκτός από 2 errors που ταιριάζουν ΑΚΡΙΒΩΣ με το ήδη αποδεκτό pattern των υπόλοιπων `ui/*.jsx` (unused `React` import στο tooltip.jsx, `react-refresh/only-export-components` στο sidebar.jsx — ίδιο με το προϋπάρχον `button.jsx`). `npm run build` απέτυχε, αλλά για ΑΣΧΕΤΟ, προϋπάρχον λόγο: το `src/components/Header/Header.jsx` λείπει από το δίσκο (`git status` το δείχνει `D` — deleted, tracked αλλά όχι στο working tree) ενώ ακόμα το κάνει import το `TenantLayout.jsx`· ΔΕΝ το άγγιξα, άσχετο με τη δουλειά του sidebar — ο χρήστης πρέπει να το δει (πιθανό ημιτελές refactor ή κατά λάθος διαγραφή· επίσης αρκετά migration `.sql` αρχεία εμφανίζονται deleted από το δίσκο).
+
+### Εκκρεμεί
+Πού θα εφαρμοστεί το Sidebar: αντικατάσταση του υπάρχοντος Fan Dashboard sidebar (hand-rolled, icon-rail + Sheet drawer) ή θεμέλιο για το (μη ξεκινημένο ακόμα) Tenant Admin Dashboard; Ρωτήθηκε στον χρήστη, εκκρεμεί απάντηση.
+
+
+
+### Εφαρμογή στο Fan Dashboard (FanDashboardLayout.jsx v2)
+
+Το `FanDashboardLayout.jsx` ξαναγράφτηκε πάνω στο νέο Sidebar (αντί για το χειροποίητο icon-rail + Sheet drawer combo της v1). Το TenantChip μπήκε μέσα στο `SidebarHeader` (μία υλοποίηση για mobile+desktop αντί για δύο ξεχωριστές όπως πριν), τα 5 nav items έγιναν `SidebarMenuItem`/`SidebarMenuButton` (asChild πάνω σε `NavLink`, `isActive` υπολογισμένο από `useLocation()`, `tooltip` prop δείχνει το όνομα όταν το sidebar είναι icon-only), `collapsible="icon"` ώστε ο χρήστης να μπορεί να το μαζέψει/ανοίξει (πριν ήταν πάντα σταθερό 80px rail στο desktop) — το θυμάται μέσω cookie. Προστέθηκε `SidebarTrigger` στο top header (αντικαθιστά το παλιό Bars3Icon+Sheet hamburger) και `SidebarRail` (λεπτή λωρίδα στην άκρη, εναλλακτικός τρόπος toggle).
+
+**Συνειδητή αλλαγή που αξίζει να τη δει ο χρήστης σε πραγματικό build:** το χρώμα. Το v1 είχε πάντα σκούρο (`bg-gray-900`) rail· το νέο Sidebar χρησιμοποιεί το default (ανοιχτόχρωμο) shadcn sidebar theme (τα `--sidebar*` CSS vars υπάρχουν ήδη στο `index.css` και για dark mode, αλλά δεν ενεργοποιήθηκε καμία dark-mode εξαναγκασμένη κλάση εδώ — θα χρειαζόταν ξεχωριστή απόφαση/δοκιμή αν θέλουμε να ξαναγίνει σκούρο). Ο χρήστης πρέπει να το τρέξει (`npm run dev`) και να πει αν του αρέσει έτσι ή θέλει το παλιό σκούρο look.
+
+**Μάθημα διαδικασίας:** μεγάλα αρχεία (π.χ. το 639-γραμμών `sidebar.jsx`) που μεταφέρονται στη συσκευή του χρήστη μέσω `device_bash` πρέπει να επαληθεύονται με `sha256sum` και στις δύο πλευρές πριν θεωρηθούν σωστά γραμμένα — μια πρώτη μεταφορά (μέσω base64 pasted σε μεγάλο block) είχε σιωπηλή αλλοίωση περιεχομένου σε 2 σημεία (`FanDashboardLayout.jsx` πρώτο draft, και το ίδιο το `sidebar.jsx`) που το `eslint`/`build` ΔΕΝ έπιασαν γιατί δεν έσπαγαν το syntax. Λύση: heredoc με quoted delimiter (`cat > file << 'EOF'`) αντί για base64 — μηδενικός κίνδυνος shell-expansion ΚΑΙ πιο αξιόπιστη αναπαραγωγή μεγάλου κειμένου· επαλήθευση με `sha256sum` πάντα μετά από μεταφορά μεγάλου αρχείου.
+
+### Εκκρεμεί
+Tenant Admin Dashboard: θα ξαναχρησιμοποιηθεί το ίδιο Sidebar σύστημα όταν ξεκινήσει η υλοποίησή του (ο χρήστης το επιβεβαίωσε). Ο χρήστης πρέπει να δοκιμάσει live το νέο Fan Dashboard sidebar και να πει αν του αρέσει το ανοιχτόχρωμο theme ή θέλει να ξαναγίνει σκούρο.
+
+
+### 🐛 Bug (βρέθηκε από τον χρήστη σε πραγματικό build): `Tooltip must be used within TooltipProvider`
+
+Ο χρήστης δοκίμασε το νέο Fan Dashboard sidebar και ανέφερε ότι πατώντας το SidebarTrigger εικονίδιο (δίπλα στο "Ο λογαριασμός μου") η σελίδα έσκαγε σε error page. Screenshot + console log επιβεβαίωσαν ακριβώς την αιτία: `Tooltip must be used within TooltipProvider`, πεταμένο μέσα από `SidebarMenuButton` (κάθε nav item περνάει `tooltip={item.name}`, που ρεντεράρει ένα `<Tooltip>` — Radix Tooltip.Root — ΠΑΝΤΑ, ανεξάρτητα αν είναι ορατό). Ξέχασα να προσθέσω `<TooltipProvider>` κάπου στο δέντρο — το ίδιο το shadcn το αναφέρει ρητά στην τεκμηρίωσή του (docs field του tooltip.json registry entry): "Remember to wrap your app with the TooltipProvider component."
+
+**Fix:** `<TooltipProvider>` προστέθηκε ΜΙΑ φορά στη ρίζα, στο `App.jsx` (τυλίγει το `<ConcertoBar>` + το root `<Outlet>`) — καλύπτει αυτόματα ΚΑΘΕ μελλοντικό `<Tooltip>` οπουδήποτε στο δέντρο, όχι μόνο το Fan Dashboard sidebar, άρα και το μελλοντικό Tenant Admin Dashboard δεν θα χρειαστεί να το ξαναπροσθέσει.
+
+`npx eslint src/App.jsx` καθαρό (0 errors, ούτε καν από τα ήδη γνωστά 2 patterns). `npm run build` καθαρό.
+
+### 🔍 Έλεγχος (audit) για άλλα missing Provider/setup gaps, μετά το bug του Tooltip
+
+Μετά το bug του `TooltipProvider`, ο χρήστης ζήτησε έλεγχο όλου του project για ανάλογα κενά — άλλο Radix component που να χρειάζεται root Provider/wrapper και να μην το έχουμε προσθέσει. Έλεγχος:
+
+- Καταγράφηκαν όλα τα Radix primitives που χρησιμοποιεί σήμερα το project (μέσα από το ενιαίο πακέτο `radix-ui`): `Dialog`, `DropdownMenu`, `Label`, `Select`, `Separator`, `Sheet` (= Dialog), `Slot`, `Tabs`, `Tooltip`.
+- Για καθένα εκτός του Tooltip, ελέγχθηκε το επίσημο shadcn registry entry (docs field) — κανένα δεν αναφέρει ανάγκη για root Provider/wrapper. Είναι όλα self-contained ανά instance (κάθε `<Dialog>`, `<Select>` κ.λπ. κουβαλάει το δικό του context, δεν χρειάζεται κοινό ancestor).
+- Ελέγχθηκε αν χρησιμοποιείται `Toast`/`Sonner` πουθενά στο project (θα χρειαζόταν δικό του `<Toaster />` στη ρίζα) — δεν βρέθηκε καμία χρήση, άρα δεν εκκρεμεί τίποτα εκεί.
+- Επιβεβαιώθηκε ότι ΟΛΑ τα routes (main.jsx) είναι children του root route `'/'` με `element: <App />` — άρα το `<TooltipProvider>` που μπήκε στη ρίζα του `App.jsx` καλύπτει πραγματικά ΟΛΟ το δέντρο, χωρίς κανένα route να το προσπερνάει.
+- Παράλληλα ξεκαθαρίστηκε και το ανοιχτό ερώτημα για το light/dark theme του νέου sidebar: το `src/index.css` έχει ήδη ΣΩΣΤΑ ορισμένα και τα δύο sets of `--sidebar-*` CSS variables (light στο `:root`, dark στο `.dark`) — δεν λείπει τίποτα εκεί. Απλά το project δεν έχει ακόμα κανέναν μηχανισμό dark mode (δεν βρέθηκε `ThemeProvider`/`next-themes`/οποιοδήποτε σημείο που να προσθέτει την κλάση `.dark` πουθενά) — άρα το sidebar εμφανίζεται σήμερα μόνο στο light theme, όχι επειδή λείπει κάποιο setup, αλλά επειδή δεν έχει χτιστεί ακόμα dark mode toggle. Το αν θα προστεθεί dark mode αργότερα παραμένει ανοιχτή απόφαση του χρήστη.
+
+**Συμπέρασμα:** δεν βρέθηκε άλλο missing-Provider/setup gap. Το μόνο πραγματικό ήταν το Tooltip, ήδη διορθωμένο.
+
+### Sidebar v3 — collapsible submenu (Αγαπημένα / Καλάθι)
+
+Ο χρήστης περιέγραψε νέο concept για το Fan Dashboard sidebar: αντί για επίπεδη λίστα με 5 εικονίδια (v2), δύο από αυτά ("Αγαπημένα", "Καλάθι") να ανοίγουν υποκατηγορίες μέσα στο ίδιο το sidebar όταν πατιούνται — ακριβώς το demo που δείχνουν οι δύο screenshots που έστειλε (Platform → Playground → History/Starred/Settings). Επιβεβαιώθηκε ότι αυτό είναι ΚΥΡΙΟΛΕΚΤΙΚΑ το επίσημο `nav-main.tsx` pattern από το shadcn `sidebar-07` block (Collapsible + SidebarMenuSub) — άρα ακολουθείται πιστά το πραγματικό πρότυπο, όχι improvisation.
+
+**Νέο real component:** `src/components/ui/collapsible.jsx` (Radix `Collapsible` primitive — `Collapsible`/`CollapsibleTrigger`/`CollapsibleContent`), fetched από το πραγματικό registry (`ui.shadcn.com/r/styles/radix-nova/collapsible.json`) και προσαρμοσμένο σε JS/JSX (αφαίρεση TS types, ίδια δομή).
+
+**Τελική δομή NAV_ITEMS (FanDashboardLayout.jsx v3):**
+- Προφίλ (leaf, όπως στο v2) → `/account/profile`
+- Αγαπημένα (group, HeartIcon) → Αγαπημένα tenants (`/account/tenants`), Αγαπημένα merch (`/account/merch`), Αγαπημένα events (`/account/events`) — ΜΙΑ υποκατηγορία για events, όχι upcoming/past ξεχωριστά (ρητή διόρθωση του χρήστη).
+- Καλάθι (group, ShoppingCartIcon) → Ολοκληρωμένες παραγγελίες (`/account/orders` — ΙΔΙΟ route με πριν, απλά μετακινήθηκε μέσα στο νέο submenu, καμία διπλή λογική/route), Τρέχον καλάθι (ΝΕΟ route `/account/cart` → νέο placeholder component `FanCurrentCartRoute.jsx`, ίδιο ύφος με το ήδη υπάρχον `FanOrdersRoute.jsx` — δεν υπάρχει ακόμα σύστημα καλαθιού).
+
+**Εικονίδιο "Ολοκληρωμένες παραγγελίες":** `CheckCircleIcon` (Heroicons outline), βαμμένο πράσινο (`text-green-600`) — αντιστοιχεί στο "πράσινο κυκλικό με λευκό βελάκι" που περιέγραψε ο χρήστης. Μπαίνει ως προαιρετικό icon μέσα στο `SidebarMenuSubButton` — data/props-level προσθήκη, καμία δομική αλλαγή στο ίδιο το component (το `isActive` prop του `SidebarMenuSubButton` επιβεβαιώθηκε ήδη υπαρκτό στο `sidebar.jsx`, χρησιμοποιείται κανονικά).
+
+**⚠️ Business rule προς υλοποίηση αργότερα (ΜΗΝ ξεχαστεί):** ο χρήστης ζήτησε ρητά τα αγαπημένα events να δείχνουν ΜΟΝΟ επερχόμενα — όταν περνάει η ημερομηνία ενός event, να φεύγει μόνο του από τη λίστα αγαπημένων. Αυτό ΔΕΝ υλοποιήθηκε τώρα (το `FanFavoriteEventsRoute.jsx` είναι ακόμα σε πρώιμο/placeholder στάδιο δεδομένων) — πρέπει να μπει στο query/φίλτρο όταν χτιστεί το πραγματικό data layer για τα αγαπημένα events (πιθανότατα φίλτρο στο query βάσει ημερομηνίας, ή/και decision αν διαγράφεται πραγματικά η εγγραφή favorite ή απλά κρύβεται — προς συζήτηση τότε).
+
+`npx eslint` σε όλα τα αλλαγμένα/νέα αρχεία (`collapsible.jsx`, `FanDashboardLayout.jsx`, `FanCurrentCartRoute.jsx`, `main.jsx`) → 0 errors. `npm run build` → καθαρό (το already-known bundle-size warning είναι preexisting, άσχετο με αυτή την αλλαγή).
+
+### Sidebar v4 — icon bar κάτω από τον τίτλο (αντί για αριστερό sidebar)
+
+Ο χρήστης δοκίμασε το v3 (αριστερό shadcn Sidebar, collapsed σε λεπτή icon-only rail) και έστειλε screenshot: τα εικονίδια στη rail έδειχναν πολύ λεπτά/χωρίς ορατό κουμπί-περίγραμμα. Ζήτησε ρητά διόρθωση: (1) κάθε εικονίδιο μέσα σε κυκλικό border κολλητό στο μέγεθός του, (2) η μπάρα εικονιδίων να φύγει από το αριστερό sidebar και να μπει εμφανέστερα ΚΑΤΩ από τον τίτλο "Ο λογαριασμός μου", (3) ξεκάθαρο active-state indicator. Ρωτήθηκε ρητά (AskUserQuestion) αν ήθελε να μετακινηθεί η μπάρα κάτω από τον τίτλο ή να μείνει στο sidebar απλά πιο ορατή — επέλεξε μετακίνηση.
+
+**Νέα δομή (FanDashboardLayout.jsx v4):** το `SidebarProvider`/`Sidebar`/`SidebarRail`/`SidebarInset` (v2/v3) αφαιρέθηκε εντελώς από αυτό το layout. Αντ' αυτού: header με τίτλο "Ο λογαριασμός μου" (+ TenantChip δεξιά, μετακινήθηκε εδώ από το πρώην SidebarHeader), και από κάτω μια οριζόντια `<nav>` με κυκλικά εικονίδια-κουμπιά (`size-11` κύκλος γύρω από `size-5` icon, `bg-primary` όταν active, μαύρο-φόντο ↔ διαφανές border ανάλογα state — ξεκάθαρη οπτική διαφορά, όχι απλή απόχρωση φόντου όπως πριν).
+
+**"Αγαπημένα"/"Καλάθι"** (τα δύο group items) ανοίγουν πλέον `DropdownMenu` (πραγματικό Radix primitive, ήδη υπαρκτό `dropdown-menu.jsx` στο project) κάτω από το εικονίδιο, με τις υποκατηγορίες μέσα — ίδιο pattern με το `nav-projects.tsx` του επίσημου shadcn `sidebar-07` block. Το "Ολοκληρωμένες παραγγελίες" κρατάει το πράσινο `CheckCircleIcon` του.
+
+**Δεν διαγράφηκε τίποτα από το v2/v3** — `sidebar.jsx`, `collapsible.jsx`, `tooltip.jsx`, `skeleton.jsx`, `useIsMobile.js` παραμένουν στο project αχρησιμοποίητα εδώ αλλά έτοιμα για το μελλοντικό Tenant Admin Dashboard (ο χρήστης είχε πει "και τα δύο" νωρίτερα — θα κριθεί ξανά τότε αν ταιριάζει καλύτερα το πραγματικό Sidebar εκεί, ή αν προτιμηθεί κι εκεί το ίδιο icon-bar pattern).
+
+`npx eslint` καθαρό. `npm run build` καθαρό (ίδιο preexisting bundle-size warning, άσχετο).
+
+### Sidebar v5 — pill icon bar (στυλ Instagram bottom nav) + 2 νέα εικονίδια
+
+Ο χρήστης έστειλε screenshot από Instagram (η ημιδιάφανη pill μπάρα κάτω από ένα Reel: Home/Reels/Direct/Search/Avatar, το Home με γκρι στρογγυλό highlight πίσω του) και ζήτησε το ίδιο στυλ για τη μπάρα εικονιδίων του v4. Υιοθετήθηκε το ΣΤΥΛ (στρογγυλό pill container με border, ήσυχο `bg-muted` highlight πίσω από το επιλεγμένο αντί για γεμάτο χρώμα, solid εκδοχή του εικονιδίου όταν active αντί για outline — ίδια σύμβαση με το IG bar) — ΟΧΙ η "ημιδιάφανη μπάρα πάνω σε video" συμπεριφορά, αφού δεν υπάρχει video background σε αυτή τη σελίδα· παρέμεινε στατική κάτω από τον τίτλο. Ρητά σημειωμένο στο ίδιο το αρχείο ως σχόλιο, ώστε αν ο χρήστης θέλει πραγματικό floating/sticky bar να το ζητήσει ρητά.
+
+**Δύο νέα εικονίδια με πραγματική λειτουργικότητα, μπήκαν μέσα στο ίδιο pill:**
+- **"C"** (αριστερά) — προσωρινό, μέχρι να δοθεί το πραγματικό λογότυπο Concerto. Ήδη λειτουργικό: εξωτερικό link στο μελλοντικό `concertofamily.gr` (plain `<a href>`, ίδιο convention με το `crossTenantHref` cross-domain pattern που υπάρχει ήδη στο project). **Εκκρεμεί:** αντικατάσταση του γράμματος με το πραγματικό λογότυπο όταν δοθεί.
+- **Avatar tenant** (δεξιά) — ίδια λειτουργικότητα με το παλιό `TenantChip` (v2-v4: `logo_url` του tenant, click → `/about`), αλλά τώρα ζει ΜΕΣΑ στο pill αντί για ξεχωριστά δίπλα στον τίτλο. Το `TenantChip` ως ξεχωριστό component αφαιρέθηκε — απορροφήθηκε στο ίδιο pill.
+
+Icon-ordering: C (brand/home) → Προφίλ → Αγαπημένα → Καλάθι → tenant avatar — ίδια λογική θέση με το IG (brand/home αριστερά, avatar δεξιά).
+
+`npx eslint` καθαρό, `npm run build` καθαρό (ίδιο preexisting bundle-size warning, άσχετο με αυτή την αλλαγή — απλά μεγαλύτερο icon set από τα δύο Heroicons sets, outline+solid).
+
+### 🐛 Console warning: `Blocked aria-hidden on an element because its descendant retained focus`
+
+Ο χρήστης ανέφερε ότι πατώντας την καρδούλα ("Αγαπημένα") και ξαναπατώντας την (άνοιγμα/κλείσιμο του dropdown) εμφανιζόταν αυτό το warning στο console. ΔΕΝ ήταν crash/ErrorPage — μόνο console warning.
+
+**Αιτία:** γνωστό, καταγεγραμμένο συμπεριφορά/ζήτημα του Radix `DropdownMenu` (`modal` prop = `true` by default) — όσο το menu είναι ανοιχτό, ο Radix κρύβει (`aria-hidden`) τα γύρω στοιχεία από assistive technology και κλειδώνει το focus μέσα στο menu (modal/focus-trap συμπεριφορά). Όταν κλείνει, το focus επιστρέφει στο trigger button την ίδια στιγμή που αφαιρείται το `aria-hidden` από τους predecessors — η σειρά αυτών των δύο ενεργειών προκαλεί στιγμιαία ασυνέπεια που το Chrome επισημαίνει ως console warning.
+
+**Fix:** προστέθηκε `modal={false}` στο `<DropdownMenu>` (FanDashboardLayout.jsx) — επίσημο, τεκμηριωμένο prop του ίδιου του Radix `DropdownMenu.Root` (όχι custom workaround). Αφαιρεί το focus-trap/aria-hidden-background συμπεριφορά για αυτά τα δύο navigation dropdowns (Αγαπημένα/Καλάθι) — λογικό εδώ αφού δεν είναι κρίσιμα modal forms, απλά navigation menus. `npx eslint`/`npm run build` καθαρά μετά το fix.
+
+### Sidebar v6 — το pill πήρε τη θέση του ConcertoBar, πραγματικό λογότυπο, πραγματικό "τρέχον καλάθι"
+
+Μεγάλη αλλαγή, πολλά κομμάτια μαζί — ο χρήστης τα ζήτησε όλα στο ίδιο μήνυμα:
+
+**1. Το global ConcertoBar (dark bar "Concerto" + avatar, πάνω από ΚΑΘΕ σελίδα) κρύβεται πλέον μέσα στο `/account`.** `App.jsx` παίρνει `useLocation()`, υπολογίζει `isAccountSection = pathname.startsWith("/account")`, ρεντεράρει `<ConcertoBar>` μόνο όταν `!isAccountSection`. Στις tenant-branded σελίδες (about/merch/events) το ConcertoBar παραμένει ΑΚΡΙΒΩΣ όπως ήταν — καμία αλλαγή εκεί.
+
+**2. Το pill nav (v5) ανέβηκε στη θέση του, ΜΕΣΑ στο FanDashboardLayout.jsx**: `sticky top-4`, οριζόντια κεντραρισμένο (`flex justify-center`), με κενό από πάνω (`pt-4` wrapper πριν το sticky, ώστε να υπάρχει κενό ΚΑΙ πριν κάνει scroll ο χρήστης), `bg-background/80` + `backdrop-blur-md` ώστε να μη σκεπάζει εντελώς το περιεχόμενο πίσω του καθώς "κατεβαίνει" μαζί με το scroll. Ο τίτλος "Ο λογαριασμός μου" δεν είναι πια μέσα στο sticky pill — μετακινήθηκε σαν απλό κείμενο μέσα στο scrollable περιεχόμενο, πάνω από το Outlet (δική μου επιλογή, δεν ζητήθηκε ρητά — να ειδοποιηθεί ο χρήστης να το ελέγξει).
+
+**3. Το προσωρινό "C" αντικαταστάθηκε με το πραγματικό λογότυπο Concerto** — ο χρήστης έδωσε το αρχείο, αποθηκεύτηκε ως `src/assets/images/concerto-logo.jpg` (ίδιο convention με `bandLogoFallback`/`bandCoverFallback` στο Header.jsx — τοπικό asset, ES import, όχι public/ folder). ⚠️ Σημείωση διαδικασίας: η μεταφορά αρχείου εικόνας μέσω `device_commit_files` άλλαξε το checksum (7330 bytes → 13101 bytes, re-encode, ΟΧΙ corruption — επιβεβαιώθηκε οπτικά ότι είναι πανομοιότυπη εικόνα, ίδιες διαστάσεις 514×502) — για εικόνες/binary αρχεία το sha256 check ΔΕΝ είναι αξιόπιστο σαν μόνο κριτήριο όπως στα .jsx/.md text αρχεία, χρειάζεται οπτική επιβεβαίωση (στάλθηκε πίσω, ανοίχτηκε, επιβεβαιώθηκε ίδιο). Link του λογότυπου: `https://concertofamily.gr` (το μελλοντικό κεντρικό domain).
+
+**4. Το avatar-με-τις-επιλογές (Προφίλ/Διαγραφή λογαριασμού/Αποσύνδεση) μπήκε στο pill, δίπλα στο λογότυπο** — νέο component `src/components/Concerto/FanDashboard/AccountAvatarMenu.jsx`, ΙΔΙΕΣ επιλογές με το dropdown που είχε το ConcertoBar, αλλά ξεχωριστό αρχείο (ΟΧΙ shared component) — εδώ δεν χρειάζεται το "μη συνδεδεμένος" branch/login button/ConcertoAuthDialog, αφού μέσα στο Fan Dashboard ο fan είναι ΠΑΝΤΑ ήδη συνδεδεμένος. Ηθελημένη μικρή επανάληψη κώδικα αντί για πρόωρο shared abstraction μεταξύ δύο components με διαφορετικές ανάγκες (risk/complexity tradeoff, βλ. session log).
+
+**5. Το reactive guard "μη συνδεδεμένος fan στο /account → πίσω στο /about" μετακόμισε από το ConcertoBar.jsx στο ίδιο το FanDashboardLayout.jsx.** Κρίσιμο να μη χαθεί όταν το ConcertoBar σταμάτησε να ρεντεράρεται εκεί — τώρα ζει πιο φυσικά, δίπλα στο route που προστατεύει, και είναι ΚΑΙ απλούστερο (δεν χρειάζεται πια το `location.pathname.startsWith("/account")` check — αφού αυτό το layout ΕΙΝΑΙ το `/account`).
+
+**6. "Τρέχον καλάθι" έγινε πραγματικό** (ανακαλύφθηκε ότι υπάρχει ΗΔΗ πλήρες σύστημα καλαθιού per-tenant: `useCart.js`, `cart_items` table, tenant-scoped — η προηγούμενη σημείωση "δεν υπάρχει σύστημα καλαθιού" αφορούσε global/συγκεντρωτικό view, όχι το ίδιο το καλάθι). Νέο `src/queries/useFanCart.js` — ίδιο στυλ διαδοχικών queries με `useFanFavoriteMerch.js`/`useFanTenants.js`, ομαδοποιεί ΑΝΑ tenant. `FanCurrentCartRoute.jsx` δείχνει tenant name+logo και τα προϊόντα του, READ-ONLY (link "πίσω στο tenant" για μεταβολή ποσότητας/αφαίρεση — δεν αναδημιουργείται το CRUD που ήδη υπάρχει στο CartDialog.jsx ανά tenant). Αν ο χρήστης θέλει inline quantity-edit και εδώ, είναι follow-up, όχι έγινε τώρα.
+
+`npx eslint` καθαρό σε όλα τα αλλαγμένα/νέα αρχεία (`App.jsx`, `ConcertoBar.jsx`, `AccountAvatarMenu.jsx`, `FanDashboardLayout.jsx`, `FanCurrentCartRoute.jsx`, `useFanCart.js`). `npm run build` καθαρό, το λογότυπο μπήκε σωστά στο bundle (13.10 kB asset).
+
+### Μικροδιόρθωση: το λογότυπο Concerto στο pill έγινε ανενεργό (προσωρινά)
+
+Ο χρήστης ζήτησε ρητά: μέχρι να υπάρξει πραγματική σελίδα στο `concertofamily.gr`, το λογότυπο στο pill (FanDashboardLayout.jsx) να ΜΗΝ κάνει τίποτα όταν το πατάει κάποιος — να μην υπάρχει "νεκρό" link. Το `<a href="https://concertofamily.gr">` έγινε απλό `<div>` (ίδια εμφάνιση, καμία πλοήγηση). Σχόλιο μέσα στο JSX εξηγεί γιατί και τι να αλλάξει (ξαναβάλε `href`) όταν υπάρξει πραγματικός προορισμός — ΜΗΝ το ξεχάσουμε.
+
+`npx eslint`/`npm run build` καθαρά.
+
+### 🐛 Μικροδιόρθωση: το pill δεν έμενε ορατό κατά το scroll
+
+Ο χρήστης δοκίμασε και ανέφερε ότι το pill (v6) ΔΕΝ συνέχιζε να φαίνεται καθώς έκανε scroll — το `position: sticky` που είχε μπει δεν δούλευε όπως αναμενόταν (πιθανό ζήτημα με κάποιον ancestor/stacking context, δεν επιβεβαιώθηκε ακριβώς ποιο — δεν υπάρχει δυνατότητα να δει ο AI assistant live browser σε αυτό το session, βλ. brief).
+
+**Fix:** `position: sticky` → `position: fixed` (`fixed inset-x-0 top-4 z-40`) — το fixed είναι ΠΑΝΤΑ σχετικό με το viewport, ανεξάρτητο από τυχόν overflow/stacking στους γονείς του, άρα εγγυημένα "κατεβαίνει μαζί" με τον χρήστη. Επειδή το fixed βγαίνει από το normal document flow, το περιεχόμενο από κάτω χρειάστηκε `pt-20` (ήταν `pt-8`) ώστε να μην κρύβεται η αρχή του πίσω από το bar. Παράλληλα εντονοποιήθηκε λίγο το "θολό γυαλί" εφέ όπως ζητήθηκε: `bg-background/80` → `/70`, `backdrop-blur-md` → `backdrop-blur-lg`.
+
+`npx eslint`/`npm run build` καθαρά.
+
 ---
 
 ## Οδηγία προς AI assistant (Claude ή άλλο)
