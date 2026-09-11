@@ -779,6 +779,114 @@ WHERE domain = 'concertofamily.netlify.app';
 
 ---
 
+## 📋 ΣΧΕΔΙΑΣΜΟΣ (11/9): Tenant Admin Dashboard — αρχιτεκτονική, πριν χτιστεί
+
+Ο χρήστης θέλει να χτίσουμε το Tenant Admin Dashboard βήμα-βήμα, ξεκινώντας σύντομα.
+Συζητήθηκε αρχιτεκτονική, ΧΩΡΙΣ ακόμα κώδικα/migration να έχει τρέξει. Καταγραφή ώστε να
+μη χαθεί η σκέψη:
+
+**Authentication vs authorization (η βασική διάκριση):** Το login (Google OAuth μέσω
+Supabase Auth) είναι ήδη έτοιμο και ΙΔΙΟ για fans και μελλοντικούς admins — απαντάει μόνο
+"ποιος είσαι". Το "τι επιτρέπεσαι να κάνεις" (ποιο tenant διαχειρίζεσαι) ΔΕΝ υπάρχει ακόμα
+πουθενά· χρειάζεται νέος πίνακας:
+```
+tenant_admins: user_id (FK auth.users), tenant_id (FK tenants)
+```
+Μία γραμμή = δικαίωμα διαχείρισης. **Ρητή απαίτηση χρήστη: πολλαπλοί admins (πολλά Gmail)
+ανά tenant** — το σχήμα `(user_id, tenant_id)` το υποστηρίζει ήδη φυσικά (πολλές γραμμές,
+ίδιο tenant_id, διαφορετικό user_id), καμία πρόσθετη δουλειά χρειάζεται γι' αυτό.
+Λεπτομέρειες (π.χ. επίπεδα δικαιωμάτων owner/editor) αναβάλλονται σκόπιμα για όταν φτάσουμε
+εκεί.
+
+**Enforcement — RLS στη βάση, ΟΧΙ μόνο frontend gating.** Write policies πάνω σε
+tenant_settings/events/products κ.λπ. θα ελέγχουν `EXISTS (SELECT 1 FROM tenant_admins
+WHERE user_id = auth.uid() AND tenant_id = <tenant_id της γραμμής>)`. Ισχύει server-side,
+αδύνατο να παρακαμφθεί από το frontend.
+
+**Bootstrap του πρώτου admin ανά tenant:** Ο χρήστης (πλατφόρμα owner) το κάνει χειροκίνητα
+αρχικά — ο υπεύθυνος του tenant κάνει sign in μία φορά, δίνει το email/user ID του, ο
+χρήστης γράφει τη γραμμή στο `tenant_admins`. **Μελλοντικό, ρητά επιθυμητό βήμα:** αυτόματο
+invite flow (πρόσκληση προγραμματιστικά) — όχι blocker τώρα, απλά σημειωμένη κατεύθυνση.
+
+**Audit trail / "υπόλογος για ό,τι κάνει":** Στοιχειώδες επίπεδο — `updated_by uuid
+references auth.users(id)` + `updated_at` σε κάθε πίνακα που γίνεται editable, γεμισμένα
+ΑΥΤΟΜΑΤΑ από trigger (`new.updated_by := auth.uid()`) ώστε να είναι αδύνατο να
+"ψευτιστεί" ποιος έκανε την αλλαγή. Πλήρες ιστορικό (κάθε αλλαγή, όχι μόνο η τελευταία) θα
+χρειαστεί ξεχωριστό `*_history` table με trigger insert σε κάθε UPDATE — σημειωμένο ως
+επιλογή για αργότερα, όχι βήμα 1.
+
+**Next.js — ρητά εξετάστηκε και απορρίφθηκε ως άσχετο με ασφάλεια.** Ο χρήστης ρώτησε αν
+χρειάζεται migration σε Next.js για να είναι "ασφαλής η ομάδα". Απάντηση: όχι — η ασφάλεια
+εδώ προέρχεται από το RLS μέσα στη βάση (επίσημα συνιστώμενο pattern της ίδιας της
+Supabase, ανεξάρτητα frontend framework), όχι από το framework. Το `anon key` είναι
+σκόπιμα δημόσιο/client-side, ασφαλές ΜΟΝΟ λόγω RLS. Επιβεβαιωμένο ξανά: κανένα service-role
+key πουθενά στο frontend, μόνο anon key — σωστή ρύθμιση. Ένα migration σε Next.js θα ήταν
+τεράστια δουλειά για μηδενικό πρόσθετο όφελος ασφάλειας στο δικό μας μοντέλο απειλών. RLS
+λύνει συγκεκριμένα cross-tenant data isolation — δεν είναι "100% ασφάλεια από χάκερ" (π.χ.
+phishing σε admin λογαριασμό είναι ξεχωριστό θέμα, κοινό σε κάθε εφαρμογή).
+
+**Πού ζει το dashboard:** πιθανότατα ξεχωριστό subdomain/μικρή εφαρμογή (π.χ.
+`dashboard.concerto.gr`), όχι μέσα στο ίδιο site που βλέπουν οι fans — ήδη σημειωμένο
+παλιότερα ως ανοιχτό θέμα, επιβεβαιώνεται εδώ.
+
+**Κατάσταση:** Καμία αλλαγή στη βάση/κώδικα δεν έχει γίνει ακόμα γι' αυτό — καθαρά
+σχεδιασμός. Το πρώτο πραγματικό βήμα χτισίματος (δημιουργία `tenant_admins` table + πρώτο
+write policy δοκιμαστικά σε ένα table) θα ξεκινήσει σε επόμενο βήμα, μετά από ρητή
+επιβεβαίωση του χρήστη.
+
+---
+
+## 🏗️ Monorepo restructure (11/9) — apps/tenant-site + packages/shared, πριν το Admin Dashboard
+
+Αποφασίστηκε με τον χρήστη (βλ. προηγούμενη ενότητα σχεδιασμού) να χτιστεί το Tenant Admin
+Dashboard μέσα σε npm workspaces monorepo, όχι ξεχωριστό repo — ρητή απόφαση με σκοπό
+μελλοντική ομάδα developers να αναγνωρίσει αμέσως τη δομή (industry-standard `apps/`+
+`packages/` pattern), χωρίς επανάληψη κοινού κώδικα.
+
+**Έγινε (με πλήρη testing σε κάθε βήμα, per ρητή απαίτηση χρήστη "να τα κάνεις τεστ"):**
+- Ολόκληρη η υπάρχουσα εφαρμογή μετακόμισε από root → `apps/tenant-site/` (`git mv`,
+  ιστορικό διατηρήθηκε): `src/`, `public/`, `index.html`, `vite.config.js`, `package.json`
+  (name: `tenant-site`), `jsconfig.json`, `components.json`, `eslint.config.js`,
+  `README.md`, `.env`.
+- `docs/` και `supabase/` ΜΕΝΟΥΝ στο root — project-level, όχι tenant-site-specific.
+- Νέο root `package.json` με `"workspaces": ["apps/*", "packages/*"]` + convenience
+  scripts (`npm run dev`/`npm run build` από το root πλέον δουλεύουν κανονικά χωρίς `cd`,
+  delegate στο `apps/tenant-site` workspace· `dev:admin`/`build:admin` έτοιμα για όταν
+  μπει το admin-dashboard).
+- Νέο `packages/shared/` (`@concerto/shared`) με πρώτο κοινό κομμάτι: `createSupabaseClient()`
+  wrapper — θα το χρησιμοποιούν και οι δύο εφαρμογές, μηδενική επανάληψη.
+- Stale, redundant per-app `package-lock.json` αφαιρέθηκε (npm workspaces θέλει ΕΝΑ
+  lockfile στο root, όχι ανά workspace member).
+
+**⚠️ ΚΡΙΣΙΜΟ — Netlify config ΠΡΕΠΕΙ να ενημερωθεί ΠΡΙΝ/μαζί με το επόμενο push, αλλιώς
+σπάει το live auto-deploy:**
+- Base directory: ΜΕΝΕΙ κενό (root) — καμία αλλαγή.
+- Build command: ΜΕΝΕΙ `npm run build` — καμία αλλαγή (το νέο root script το κάνει delegate
+  αυτόματα στο σωστό workspace).
+- **Publish directory: ΠΡΕΠΕΙ να αλλάξει από `dist` σε `apps/tenant-site/dist`** — το build
+  output μετακόμισε μαζί με την εφαρμογή. Χωρίς αυτή την αλλαγή, το Netlify θα ψάχνει σε
+  λάθος φάκελο μετά το επόμενο deploy.
+- Πάει στο Netlify dashboard → Site settings → Build & deploy → Build settings → Edit.
+
+**Testing που έγινε (real evidence, όχι υποθέσεις):**
+- `npm install` έτρεξε ΑΠΟ ΤΟΝ ΧΡΗΣΤΗ (το `device_bash` κανάλι τρέχει μέσα σε ξεχωριστό
+  Linux VM στο Mac — ΔΕΝ έχει πρόσβαση στο npm registry, `blocked-by-allowlist` — ΚΑΙ δεν
+  μπορεί να τρέξει `npm run dev`/`build` λόγω native bindings χτισμένων για macOS/arm64,
+  όχι Linux. **Σημαντικός νέος κανόνας για το AI assistant: `npm run dev`/`npm run build`/
+  ό,τι χρειάζεται να πραγματικά ΤΡΕΞΕΙ σε αυτό το project πρέπει να γίνεται από τον χρήστη,
+  στο δικό του πραγματικό Terminal — το `device_bash` είναι μόνο για αρχεία/git.**
+- Dev server επιβεβαιώθηκε live μέσω Chrome (villagers/about, strafi/about, strafi/merch) —
+  σωστό rendering, μηδέν console errors, το χθεσινό merch-empty-category fix ΚΑΙ το
+  TenantAbout fix επιβεβαιώθηκαν ενεργά μετά τη μετακόμιση.
+- `npm run build` (από τον χρήστη) ολοκληρώθηκε καθαρά, output επιβεβαιωμένο στο σωστό
+  νέο path (`apps/tenant-site/dist/`). Προϋπάρχον (όχι νέο) warning για μεγάλο JS chunk
+  (910KB) — ξεχωριστό, μελλοντικό code-splitting θέμα, άσχετο με τη σημερινή αλλαγή.
+
+**Επόμενο βήμα:** commit + push (μετά την ενημέρωση Netlify), μετά scaffold του
+`apps/admin-dashboard`.
+
+---
+
 ---
 
 ## Οδηγία προς AI assistant (Claude ή άλλο)
