@@ -33,7 +33,9 @@ function App() {
     // "Tooltip must be used within TooltipProvider" — ξεχάστηκε αρχικά στο
     // FanDashboardLayout.jsx, έσκαγε η σελίδα σε re-render (π.χ. όταν ο
     // χρήστης πατούσε το SidebarTrigger). Μπαίνει μία φορά εδώ, στη ρίζα,
-    // ώστε να καλύπτει ΚΑΙ το μελλοντικό Tenant Admin Dashboard.
+    // ώστε να καλύπτει όλα τα child routes αυτής της εφαρμογής. (Σημείωση
+    // 11/9: το admin-dashboard είναι πλέον ξεχωριστό app/bundle — apps/admin-dashboard —
+    // έχει το ΔΙΚΟ του TooltipProvider στο δικό του App.jsx, δεν καλύπτεται από εδώ.)
     <TooltipProvider>
       {/* Πάνω από ΟΛΑ τα child routes ΕΚΤΟΣ /account — global, όχι
           tenant-branded. Βλ. src/components/Concerto/ConcertoBar.jsx */}

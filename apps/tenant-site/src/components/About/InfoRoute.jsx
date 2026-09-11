@@ -1,6 +1,7 @@
 import { useOutletContext } from "react-router-dom"
 import BandMembers from "./BandMembers"
 import LocationGallery from "./LocationGallery"
+import EditBioDialog from "./EditBioDialog"
 import { useBandMembers } from "../../queries/useBandMembers"
 
 // Index route του '/about': bio πάντα, μετά ένα ΜΟΝΟ section επιπλέον,
@@ -18,12 +19,15 @@ import { useBandMembers } from "../../queries/useBandMembers"
 // χρησιμοποιούν, γιατί και τα δύο έχουν φυσικό χώρο (ένα festival γίνεται
 // κάπου, όχι μόνο μια μπάντα σε ένα venue).
 export default function InfoRoute() {
-  const { tenantId, tenantType, tenantBio, galleryUrls } = useOutletContext()
+  const { tenantId, tenantType, tenantBio, galleryUrls, isAdmin } = useOutletContext()
   const { data: members } = useBandMembers(tenantType === "artist" ? tenantId : null)
 
   return (
     <>
-      <h2 className="mb-2 text-sm font-medium text-gray-500">Πληροφορίες</h2>
+      <h2 className="mb-2 flex items-center text-sm font-medium text-gray-500">
+        Πληροφορίες
+        {isAdmin && <EditBioDialog tenantId={tenantId} currentBio={tenantBio} />}
+      </h2>
       {tenantBio && (
         <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">
           {tenantBio}

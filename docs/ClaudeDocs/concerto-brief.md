@@ -887,6 +887,210 @@ Dashboard μέσα σε npm workspaces monorepo, όχι ξεχωριστό repo 
 
 ---
 
+## ✅ Tenant Admin Dashboard (11/9) — πρώτο end-to-end test επιτυχές
+
+Ολοκληρώθηκε το πρώτο πλήρες, λειτουργικό κομμάτι του `apps/admin-dashboard`
+(δες και την προηγούμενη ενότητα σχεδιασμού/monorepo restructure):
+
+- `LoginPage.jsx` + `useAdminAuth.js` — σύνδεση με Google, ίδιο Supabase Auth
+  session/SSO μηχανισμό με το tenant-site (μέσω `packages/shared`).
+- `useMyAdminTenants.js` + `DashboardHomePage.jsx` — λίστα των tenants που
+  διαχειρίζεται ο συνδεδεμένος χρήστης (RLS-gated μέσω `tenant_admins`).
+- `TenantProfilePage.jsx` + `useTenantProfile.js`/`useUpdateTenantProfile.js` —
+  φόρμα επεξεργασίας bio/logo/cover (react-hook-form + zod + shadcn Field, ίδιο
+  pattern με `FanProfileRoute.jsx`), γράφει στο `tenant_settings` μέσω του RLS
+  write policy.
+- Πρόσθεσα και sign-out button στο `App.jsx` (έλειπε, χρειάστηκε για το test).
+
+**Bug που βρέθηκε και διορθώθηκε στο configuration (όχι στον κώδικα):** το
+Supabase Auth δεν είχε το `http://localhost:5174` στη λίστα επιτρεπτών Redirect
+URLs, οπότε μετά το Google OAuth σε έστελνε πίσω στο production Netlify URL
+(`concertofamily.netlify.app`) αντί για το localhost, με error. Ο χρήστης το
+διόρθωσε μόνος του: Supabase Dashboard → Authentication → URL Configuration →
+Redirect URLs → πρόσθεσε `http://localhost:5174/**`.
+
+**Missing file που βρέθηκε στο πρώτο `npm run dev:admin`:** το `field.jsx`
+(αντιγραμμένο από το tenant-site) χρειάζεται και `separator.jsx`, που δεν είχε
+αντιγραφεί αρχικά στο `apps/admin-dashboard/src/components/ui/`. Διορθώθηκε.
+
+**End-to-end test επιβεβαιωμένο (Chrome, δύο tabs):**
+1. Login με Google στο `localhost:5174` ✅
+2. Λογαριασμός χωρίς admin δικαιώματα → σωστά βλέπει "Δεν διαχειρίζεσαι κανένα
+   tenant ακόμα" (RLS δουλεύει σωστά και για ΑΡΝΗΤΙΚΗ περίπτωση) ✅
+3. Προστέθηκε 2ος admin στο ΣΤΡΑΦΙ (`samalaigkonstantinos@gmail.com`) μέσω SQL
+   — δοκιμάστηκε ταυτόχρονα το πολλαπλοί-admins-ανά-tenant feature ✅
+4. Μετά την προσθήκη, το ΣΤΡΑΦΙ εμφανίστηκε στη λίστα ✅
+5. Edit bio από το dashboard → "Αποθηκεύτηκε" ✅
+6. Η αλλαγή επιβεβαιώθηκε ζωντανά στο `strafi.concerto.gr:5173/about` ✅
+7. Μηδέν console errors σε όλα τα βήματα.
+
+**Real δεδομένα admins αυτή τη στιγμή στο ΣΤΡΑΦΙ:** `xrysoulaxouliara@gmail.com`
+(αρχικός/bootstrap) + `samalaigkonstantinos@gmail.com` (προστέθηκε για το test).
+
+**Εκκρεμεί (όχι επείγον):** το bio του ΣΤΡΑΦΙ έχει αυτή τη στιγμή δοκιμαστικό
+κείμενο από το test ("Δοκιμή admin dashboard...") — πρέπει να αντικατασταθεί με
+πραγματικό κείμενο από τον χρήστη.
+
+**Επόμενα βήματα (όχι ακόμα χτισμένα):** image upload UI για logo/cover (προς
+το παρόν μόνο paste URL), αυτοματοποιημένο invite-flow για νέους admins (προς
+το παρόν μόνο manual SQL bootstrap).
+
+---
+
+## 🎨 UI redesign admin-dashboard (12/9) — στυλ Fan Dashboard
+
+Ρητό αίτημα χρήστη: το admin-dashboard να ακολουθεί την ΙΔΙΑ φιλοσοφία/στυλ
+με το Fan Dashboard του tenant-site (`FanDashboardLayout.jsx`) — fixed,
+στρογγυλεμένο "pill" menu πάνω-κέντρο, ημιδιάφανο με blur.
+
+Άλλαξαν:
+- `App.jsx` — νέο floating pill nav (λογότυπο Concerto αριστερά, "Αρχική"
+  εικονίδιο στη μέση, `AdminAvatarMenu` δεξιά), αντί για το απλό header
+  με τίτλο + κουμπί αποσύνδεσης. Ίδιο pattern με `FanDashboardLayout.jsx`
+  αλλά πολύ πιο απλό (ένα μόνο nav item προς το παρόν).
+- Νέο `components/AdminAvatarMenu.jsx` — ίδιο μοτίβο με το
+  `AccountAvatarMenu.jsx` του tenant-site, αλλά μικρότερο (μόνο email +
+  "Αποσύνδεση" — όχι "Προφίλ"/"Διαγραφή λογαριασμού", αυτά αφορούν fans).
+- `LoginPage.jsx` — προστέθηκε το στρογγυλό λογότυπο Concerto πάνω από
+  τον τίτλο, ίδια οπτική γλώσσα.
+- `DashboardHomePage.jsx` / `TenantProfilePage.jsx` — αφαιρέθηκε ο
+  διπλός outer wrapper (mx-auto/max-w/padding δίνεται πλέον ΜΙΑ φορά από
+  το `App.jsx`, όπως στο Fan Dashboard) και το ξεχωριστό "← Πίσω" link
+  (η επιστροφή γίνεται πλέον από το "Αρχική" εικονίδιο στο πάνω pill).
+- Αντιγράφηκαν τα `dropdown-menu.jsx` (ui) και `concerto-logo.jpg` από το
+  tenant-site· προστέθηκε `@heroicons/react` στο `package.json` του
+  admin-dashboard (ήδη hoisted στο root node_modules, άρα δούλεψε άμεσα
+  χωρίς νέο `npm install`· καλό θα ήταν πάντως να ξανατρέξει κάποια στιγμή
+  για να "τυπικοποιηθεί" στο lockfile).
+
+Δοκιμάστηκε ζωντανά (Chrome, mobile viewport): pill nav, active state στο
+"Αρχική", dropdown με "Αποσύνδεση", πλοήγηση dashboard → tenant profile →
+πίσω. Μηδέν console errors.
+
+**Μικρό, γνωστό, μη-επείγον θέμα:** το avatar εικονίδιο (φωτογραφία Google
+προφίλ) στο `AdminAvatarMenu` εμφανίζεται σπασμένο (broken image) — ΙΔΙΟ
+pattern με το `AccountAvatarMenu.jsx` του tenant-site (δεν υπάρχει `onError`
+fallback σε καμία από τις δύο υλοποιήσεις). Προϋπάρχον θέμα, όχι κάτι νέο
+που εισήγαγε αυτό το redesign.
+
+**✅ Διορθώθηκε (12/9, ίδια μέρα):** προστέθηκε `onError` handler + state
+(`imageFailed`) και στα δύο components (`AdminAvatarMenu.jsx` και
+`AccountAvatarMenu.jsx`) — αν η εικόνα avatar αποτύχει να φορτώσει, πέφτει
+πίσω στο `UserCircleIcon` αντί να μείνει σπασμένη. `key={avatarUrl}` ώστε
+να ξαναδοκιμάζει αν αλλάξει ο χρήστης/URL. Δοκιμάστηκε ζωντανά στο
+admin-dashboard (Chrome) — δουλεύει. Στο tenant-site δεν έγινε live re-test
+(ίδιο, ήδη επιβεβαιωμένο pattern) γιατί χρειαζόταν φρέσκο Google sign-in
+στο strafi.concerto.gr:5173, το οποίο βρέθηκε (ξεχωριστό, μη-επείγον θέμα)
+ότι ΔΕΝ είναι ακόμα στη λίστα Redirect URLs του Supabase (μόνο το
+`http://localhost:5174/**` προστέθηκε νωρίτερα) — αν χρειαστεί ποτέ φρέσκο
+OAuth test πάνω σε tenant dev subdomain, θα χρειαστεί να προστεθεί και
+αυτό εκεί.
+
+---
+
+## ✏️ Inline admin-editing πάνω στο tenant-site (12/9) — demo επιτυχές
+
+Ρητό αίτημα χρήστη (μετά από συζήτηση αρχιτεκτονικής — βλ. παρακάτω): μοτίβο
+"Facebook Page admin" — ο admin βλέπει ΤΗΝ ΙΔΙΑ δημόσια σελίδα με τους fans
+(π.χ. strafi.concerto.gr/about), αλλά με μολύβια πάνω στο cover image και
+δίπλα στο bio, που ανοίγουν μικρό dialog για άμεση επεξεργασία — ΧΩΡΙΣ να
+χρειάζεται να πάει στο ξεχωριστό admin-dashboard.
+
+**Σημαντικό (συζητήθηκε ρητά με τον χρήστη πριν χτιστεί):** αυτό ΔΕΝ
+αντικαθιστά το admin-dashboard — συνυπάρχουν. Το admin-dashboard παραμένει
+το "backstage" (λίστα tenants, μελλοντικές πιο σύνθετες ρυθμίσεις). Το
+inline editing είναι μια ΔΕΥΤΕΡΗ, πιο γρήγορη πρόσβαση πάνω στην ΙΔΙΑ βάση/
+RLS — καμία απώλεια από τη δουλειά που έγινε στο admin-dashboard.
+
+Νέα αρχεία (`apps/tenant-site/src/`):
+- `hooks/useIsTenantAdmin.js` — ελέγχει live (μέσω `tenant_admins`) αν ο
+  συνδεδεμένος χρήστης είναι admin ΤΟΥ ΣΥΓΚΕΚΡΙΜΕΝΟΥ tenant που βλέπει.
+- `lib/tenantProfileSchema.js` — ίδιο schema με το admin-dashboard, σκόπιμη
+  μικρή επανάληψη (ίδια λογική με `AccountAvatarMenu`/`AdminAvatarMenu`).
+- `queries/useUpdateTenantSettings.js` — ίδιο write με το admin-dashboard,
+  invalidate στο `['tenant', domain]` (`useTenant.js`) ώστε η αλλαγή να
+  φανεί αμέσως, χωρίς refresh.
+- `components/Header/EditCoverImageDialog.jsx` — μολύβι πάνω-δεξιά στο
+  cover image (`Header.jsx`, μέσα σε νέο `relative` wrapper).
+- `components/About/EditBioDialog.jsx` — μικρό μολύβι δίπλα στο
+  "Πληροφορίες" (`InfoRoute.jsx`).
+- `isAdmin` περνάει από το `Header.jsx` → `Outlet context` → `InfoRoute.jsx`
+  (υπολογίζεται ΜΙΑ φορά στο Header, μέσω `useIsTenantAdmin`).
+
+**Config που χρειάστηκε (βρέθηκε κατά τη δοκιμή):** το
+`http://strafi.concerto.gr:5173/**` δεν ήταν στη λίστα Redirect URLs του
+Supabase (μόνο villagers/athensrock/localhost/netlify ήταν ήδη εκεί, από
+προηγούμενες συνεδρίες) — ο χρήστης το πρόσθεσε ο ίδιος.
+
+**Δοκιμάστηκε πλήρως ζωντανά (Chrome, strafi.concerto.gr:5173, ως
+samalaigkonstantinos@gmail.com — 2ος admin του ΣΤΡΑΦΙ):**
+1. Login → μολύβια εμφανίζονται σωστά (μόνο επειδή είναι admin) ✅
+2. Άλλαξε cover image URL → ενημερώθηκε ζωντανά, dialog έκλεισε ✅
+3. Άλλαξε bio → ενημερώθηκε ζωντανά, dialog έκλεισε ✅
+4. Μηδέν console errors σε όλο το flow.
+
+**Εκκρεμεί (όχι επείγον):** το bio του ΣΤΡΑΦΙ έχει τώρα δοκιμαστικό κείμενο
+από αυτό το test ("ΣΤΡΑΦΙ — μουσικό συγκρότημα. Νέο bio, γραμμένο απευθείας
+από τη δημόσια σελίδα...") και το cover image είναι μια τυχαία φωτογραφία
+δοκιμής (picsum.photos) — να αντικατασταθούν με πραγματικά στοιχεία.
+
+**Επόμενο βήμα προς συζήτηση:** ίδιο μοτίβο (μολύβι/κουμπί) για "Πρόσθεσε
+event" στο tab Εκδηλώσεις — βήμα-βήμα wizard δημιουργίας event, όπως
+περιέγραψε ο χρήστης. Δεν έχει χτιστεί ακόμα.
+
+---
+
+## 📤 Πραγματικό image upload (12/9) — αντί για paste URL
+
+Ρητό αίτημα χρήστη (μετά το πρώτο inline-editing demo): αντί να επικολλά
+URL, ο admin να μπορεί να ανεβάσει εικόνα ΑΠΕΥΘΕΙΑΣ από τον υπολογιστή
+του, με ρητή απαίτηση "τήρησε όλους τους κανόνες ασφαλείας ώστε να μην
+ανεβάσει κανείς malware και κρασάρει το app".
+
+**Νέο migration:** `supabase/migrations/20260911170000_add_tenant_images_storage.sql`
+(έτρεξε ο χρήστης, επιβεβαιωμένο μέσω query στα `pg_policies`/`storage.buckets`):
+- Bucket `tenant-images`, public (μόνο για READ — οι fans βλέπουν εικόνες
+  χωρίς login), με **server-side** `file_size_limit` (5MB) και
+  `allowed_mime_types` (jpg/png/webp/gif) — επιβάλλεται από το ίδιο το
+  Supabase Storage σε ΚΑΘΕ upload, όχι μόνο από το frontend μας.
+- RLS policies (insert/update/delete) πάνω στο `storage.objects`: μόνο
+  admin ΤΟΥ ΣΥΓΚΕΚΡΙΜΕΝΟΥ tenant μπορεί να γράψει στο δικό του "φάκελο"
+  (path `<tenant_id>/...`, ελέγχεται μέσω `storage.foldername(name)` +
+  `tenant_admins`) — ίδιος μηχανισμός με το `tenant_settings`.
+
+**Γιατί είναι ασφαλές από "malware/crash":** το Storage απλά αποθηκεύει/
+σερβίρει bytes, ΔΕΝ εκτελεί ποτέ ό,τι ανεβαίνει· ένα `<img>` μπορεί μόνο
+να προσπαθήσει να το δείξει ΣΑΝ εικόνα (αν αποτύχει, απλά σπασμένο
+εικονίδιο, όχι crash). Δύο επίπεδα ελέγχου: client-side (γρήγορο feedback)
++ server-side στο ίδιο το bucket (δεν παρακάμπτεται από το UI μας).
+
+**Νέα/αλλαγμένα αρχεία (`apps/tenant-site/src/`):**
+- `queries/useUploadTenantImage.js` (NEW) — validate τύπου/μεγέθους,
+  upload σε `tenant-images/<tenantId>/<prefix>-<timestamp>.<ext>`,
+  επιστρέφει το public URL.
+- `components/Header/EditCoverImageDialog.jsx` (v2) — αντικαταστάθηκε το
+  πεδίο URL με πραγματικό file input (κρυφό, trigger μέσω κουμπιού) +
+  preview (object URL, με cleanup στο unmount/close) + "Επίλεξε
+  εικόνα"/"Αποθήκευση". Στο submit: upload πρώτα (Storage), μετά
+  `useUpdateTenantSettings` με το public URL.
+
+**Δοκιμάστηκε πλήρως ζωντανά (Chrome, strafi.concerto.gr:5173):** επιλογή
+πραγματικού αρχείου εικόνας (JPEG) → preview σωστό → upload → η αλλαγή
+φαίνεται αμέσως ΚΑΙ επιβιώνει σε πλήρες page reload (άρα πραγματικά
+αποθηκεύτηκε στο Storage/tenant_settings, όχι μόνο τοπικό blob preview).
+Μηδέν console errors σε όλο το flow.
+
+**✅ Προστέθηκε ΚΑΙ για το λογότυπο (ίδια μέρα, 12/9):** νέο
+`components/Header/EditLogoImageDialog.jsx` — ίδιο μοτίβο με το cover
+(ίδιο `useUploadTenantImage`, `prefix: "logo"` αντί για `"cover"` ώστε τα
+δύο αρχεία να μη συγκρούονται μέσα στον ίδιο φάκελο tenant), μικρό
+κυκλικό μολύβι πάνω-δεξιά στο στρογγυλό avatar (`Header.jsx`, μέσα σε
+νέο `relative shrink-0` wrapper). Δοκιμάστηκε πλήρως ζωντανά (upload
+πραγματικού αρχείου → άλλαξε αμέσως → επιβίωσε σε reload) — μηδέν
+console errors.
+
+---
+
 ---
 
 ## Οδηγία προς AI assistant (Claude ή άλλο)

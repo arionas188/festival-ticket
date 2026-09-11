@@ -30,6 +30,12 @@ export default function AccountAvatarMenu() {
   const avatarUrl = user?.user_metadata?.avatar_url
   const { data: fanAccount } = useFanAccount(user?.id)
   const profileNeedsReview = fanAccount?.profile_customized !== true
+  // Το avatar URL του Google μερικές φορές αποτυγχάνει να φορτώσει
+  // (broken image) — onError πέφτει πίσω στο εικονίδιο αντί να αφήνει
+  // σπασμένη εικόνα (12/9, βλ. concerto-brief.md). key={avatarUrl}
+  // ώστε να ξαναδοκιμάζει από την αρχή αν αλλάξει ο χρήστης/URL.
+  const [imageFailed, setImageFailed] = useState(false)
+  const showImage = !!avatarUrl && !imageFailed
 
   return (
     <>
@@ -39,11 +45,13 @@ export default function AccountAvatarMenu() {
           aria-label="Ο λογαριασμός μου"
           className="relative flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground outline-hidden transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
-          {avatarUrl ? (
+          {showImage ? (
             <img
+              key={avatarUrl}
               alt="Το προφίλ σου"
               src={avatarUrl}
               className="size-8 rounded-full ring-1 ring-border"
+              onError={() => setImageFailed(true)}
             />
           ) : (
             <UserCircleIcon aria-hidden="true" className="size-6" />

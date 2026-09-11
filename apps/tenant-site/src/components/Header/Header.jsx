@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button"
 import bandLogoFallback from '../../assets/images/MwraStiFwtia.png'
 import bandCoverFallback from '../../assets/images/MwraStiFwtiaBand.webp'
 import TenantTopBar from "./TenantTopBar"
+import EditCoverImageDialog from "./EditCoverImageDialog"
+import EditLogoImageDialog from "./EditLogoImageDialog"
 import { useAuth } from "../../hooks/useAuth"
+import { useIsTenantAdmin } from "../../hooks/useIsTenantAdmin"
 import { useFanSession, useFollowTenant } from "../../queries/useFanSession"
 import { useUnfollowTenant } from "../../queries/useFanTenants"
 import { useCart } from "../../queries/useCart"
@@ -26,6 +29,12 @@ export default function Header({ tenant, settings, onRequireAuth }) {
       : 'Πληροφορίες'
 
   const { user, isLoggedIn } = useAuth()
+  // Inline admin-editing (12/9, βλ. concerto-brief.md) — true ΜΟΝΟ αν ο
+  // συνδεδεμένος χρήστης είναι πραγματικός admin ΑΥΤΟΥ του tenant (μέσω
+  // tenant_admins). Ελέγχεται εδώ (όχι μέσα στο EditCoverImageDialog) ώστε
+  // να περάσει και στα child routes μέσω Outlet context — το ίδιο isAdmin
+  // αποφασίζει και για το μολύβι του bio, στο InfoRoute.jsx.
+  const { data: isAdmin } = useIsTenantAdmin(tenant?.id, isLoggedIn ? user?.id : null)
   const { addItem } = useCart(user?.id, tenant?.id)
   const { data: isFollowing, isLoading: followLoading } = useFanSession(isLoggedIn ? user : null, tenant?.id)
   const followTenant = useFollowTenant()
@@ -86,19 +95,25 @@ export default function Header({ tenant, settings, onRequireAuth }) {
 
   return (
     <div className="min-h-screen bg-white">
-      <img
-        alt=""
-        src={tenantCover}
-        className="h-32 w-full rounded-b-2xl object-cover object-[50%_35%] sm:h-64 sm:w-2/3 sm:mx-auto"
-      />
+      <div className="relative">
+        <img
+          alt=""
+          src={tenantCover}
+          className="h-32 w-full rounded-b-2xl object-cover object-[50%_35%] sm:h-64 sm:w-2/3 sm:mx-auto"
+        />
+        {isAdmin && <EditCoverImageDialog tenantId={tenant?.id} currentUrl={settings?.cover_image_url} />}
+      </div>
 
       <div className="mx-auto max-w-md px-4 sm:max-w-2xl">
         <div className="-mt-12 flex items-end gap-4 sm:-mt-14">
-          <img
-            alt=""
-            src={tenantLogo}
-            className="size-24 rounded-full ring-4 ring-white sm:size-32"
-          />
+          <div className="relative shrink-0">
+            <img
+              alt=""
+              src={tenantLogo}
+              className="size-24 rounded-full ring-4 ring-white sm:size-32"
+            />
+            {isAdmin && <EditLogoImageDialog tenantId={tenant?.id} currentUrl={settings?.logo_url} />}
+          </div>
 
           <div className="mb-1 flex flex-1 items-center gap-3">
             {isLoggedIn ? (
@@ -183,6 +198,7 @@ export default function Header({ tenant, settings, onRequireAuth }) {
               tenantType: tenant?.type,
               tenantBio,
               galleryUrls: settings?.gallery_urls,
+              isAdmin,
             }}
           />
         </div>
