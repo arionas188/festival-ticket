@@ -192,6 +192,11 @@ export default function AddEventWizard({ tenantId, event = null }) {
   const ticketValues = watch("tickets") || []
   const pickedLocation = watch("location")
 
+  // Το ίδιο register("time") props (name/onBlur/ref) αλλά με δικό μας
+  // onChange από κάτω (βλ. handleTimeChange) — έτσι κρατάμε το πεδίο
+  // registered στο react-hook-form χωρίς να το κάνουμε πλήρως controlled.
+  const timeField = register("time")
+
   // Καθαρίζει το προσωρινό blob URL preview — ίδιο pattern με
   // EditCoverImageDialog/EditLogoImageDialog.
   useEffect(() => {
@@ -211,6 +216,20 @@ export default function AddEventWizard({ tenantId, event = null }) {
       setSubmitError(null)
       reset(buildDefaultValues(event))
     }
+  }
+
+  // Αυτόματη εισαγωγή ":" μετά τα 2 πρώτα ψηφία (12/9, ρητό αίτημα χρήστη
+  // — live mobile test): σε κινητό το πληκτρολόγιο πάνω σε inputMode="numeric"
+  // δεν έχει κουμπί ":", οπότε ο χρήστης δεν μπορούσε να ολοκληρώσει ποτέ
+  // τη μορφή "21:00" μόνος του. Τώρα γράφει μόνο ψηφία ("2100") και το
+  // πεδίο μόνο του σχηματίζει "21:00" καθώς πληκτρολογεί — το ίδιο μοτίβο
+  // με τα πεδία λήξης καρτών. Το zod regex (^([01]\d|2[0-3]):[0-5]\d$)
+  // παραμένει το τελικό safety net στο submit.
+  function handleTimeChange(event_) {
+    const digits = event_.target.value.replace(/\D/g, "").slice(0, 4)
+    const formatted = digits.length >= 3 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits
+    event_.target.value = formatted
+    timeField.onChange(event_)
   }
 
   function handleFileChange(event_) {
@@ -386,9 +405,10 @@ export default function AddEventWizard({ tenantId, event = null }) {
                     id="time"
                     type="text"
                     inputMode="numeric"
-                    placeholder="π.χ. 21:00"
+                    placeholder="--:--"
                     maxLength={5}
-                    {...register("time")}
+                    {...timeField}
+                    onChange={handleTimeChange}
                   />
                   <FieldError errors={errors.time ? [errors.time] : undefined} />
                 </Field>

@@ -1,4 +1,3 @@
-import * as React from "react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
@@ -44,6 +43,15 @@ function DialogOverlay({
   );
 }
 
+// max-h-[85vh] + overflow-y-auto (12/9, ρητό αίτημα χρήστη — bug που βρέθηκε
+// σε live mobile test): πριν, το modal δεν είχε κανένα όριο ύψους, οπότε σε
+// κινητό όταν ανοίγει το πληκτρολόγιο και καλύπτει τη μισή οθόνη, ο χρήστης
+// δεν μπορούσε να κάνει scroll μέσα στο modal για να φτάσει τα υπόλοιπα
+// πεδία — ήταν παγιδευμένος. Το bounded max-height + internal scroll λύνει
+// αυτό ανεξάρτητα από το πώς κάθε browser/OS χειρίζεται το viewport όταν
+// ανοίγει το πληκτρολόγιο (iOS Safari δεν το συρρικνώνει καθόλου, Chrome
+// Android ναι αλλά ασυνεπώς) — ισχύει για ΚΑΘΕ Dialog στο project, όχι μόνο
+// το event wizard, γιατί είναι το κοινό ui/dialog.jsx component.
 function DialogContent({
   className,
   children,
@@ -56,7 +64,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[85vh] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}>
