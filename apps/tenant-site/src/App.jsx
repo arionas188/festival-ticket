@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useTenant } from "./queries/useTenant";
 import ConcertoBar from "./components/Concerto/ConcertoBar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 
 function App() {
   const testDomain = window.location.hostname;
@@ -50,6 +51,11 @@ function App() {
           εφαρμογή σήμερα, δεν υπάρχει ακόμα κεντρικό concerto.gr) — δεν
           χρησιμοποιεί tenant/settings, απλά περνάει από τον ίδιο guard. */}
       <Outlet context={{ tenant, settings, onRequireAuth: () => setAuthOpen(true) }} />
+      {/* Global mount point για toast confirmations (12/9, ρητό αίτημα
+          χρήστη — "event καταχωρήθηκε" κ.λπ.) — μία φορά εδώ, καλύπτει όλο
+          το tenant-site· τα components καλούν απλά toast.success(...) από
+          το "sonner". */}
+      <Toaster position="bottom-right" />
     </TooltipProvider>
   );
 }

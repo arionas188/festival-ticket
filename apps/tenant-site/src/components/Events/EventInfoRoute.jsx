@@ -1,5 +1,6 @@
 import { Navigate, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom"
 import EventInfoDialog from "./EventInfoDialog"
+import LoadingDialog from "@/components/ui/loading-dialog"
 import { useEvents } from "../../queries/useEvents"
 import { isUuid } from "../../lib/isUuid"
 
@@ -26,7 +27,7 @@ export default function EventInfoRoute() {
     navigate(-1)
   }
 
-  if (isLoading) return null
+  if (isLoading) return <LoadingDialog onOpenChange={(open) => !open && handleClose()} />
 
   // Δέχεται είτε UUID (παλιά, ήδη κοινοποιημένα links) είτε slug (νέα links).
   const event = events?.find((e) =>

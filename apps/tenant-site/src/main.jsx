@@ -9,6 +9,7 @@ import MerchCategoriesRoute from './components/Merch/MerchCategoriesRoute.jsx'
 import MerchCategoryRoute from './components/Merch/MerchCategoryRoute.jsx'
 import ProductModalRoute from './components/Merch/ProductModalRoute.jsx'
 import EventsRoute from './components/Events/EventsRoute.jsx'
+import EventFormRoute from './components/Events/EventFormRoute.jsx'
 import EventModalRoute from './components/Events/EventModalRoute.jsx'
 import EventInfoRoute from './components/Events/EventInfoRoute.jsx'
 import InfoRoute from './components/About/InfoRoute.jsx'
@@ -68,6 +69,15 @@ const router = createBrowserRouter([
               { path: 'event/:eventId/info', element: <EventInfoRoute /> },
             ],
           },
+          // events/event/new + events/event/:eventId/edit (13/9, ρητό αίτημα
+          // χρήστη — πραγματική σελίδα αντί για modal, βλ. EventFormPage.jsx):
+          // ΕΠΙΠΕΔΑ (flat) siblings του 'events' παραπάνω, ΟΧΙ nested μέσα του —
+          // έτσι αντικαθιστούν εντελώς τη λίστα events αντί να κάθονται πάνω
+          // της, ακριβώς όπως θα έκανε μια πραγματική σελίδα. Παίρνουν το ίδιο
+          // Outlet context (tenantId/isAdmin κ.λπ.) από το Header.jsx, αφού
+          // είναι επίσης παιδιά του TenantLayout.
+          { path: 'events/event/new', element: <EventFormRoute /> },
+          { path: 'events/event/:eventId/edit', element: <EventFormRoute /> },
         ],
       },
       // Fan Dashboard — global, όχι tenant-branded (βλ. FanDashboardLayout.jsx

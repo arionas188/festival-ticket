@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useTickets } from "../../queries/useTickets"
+import { Skeleton } from "@/components/ui/skeleton"
 
 function getAvailabilityStatus(ticket) {
   const remaining = ticket.quantity - (ticket.quantity_sold || 0)
@@ -51,9 +52,20 @@ export default function TicketDialog({ event, open, onOpenChange, isLoggedIn, on
         </DialogHeader>
 
         <div className="space-y-3">
-          {isLoading && (
-            <p className="text-sm text-muted-foreground">Φόρτωση...</p>
-          )}
+          {isLoading &&
+            Array.from({ length: 2 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between rounded-md border border-gray-200 p-3"
+              >
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+                <Skeleton className="h-8 w-20 rounded-lg" />
+              </div>
+            ))}
 
           {!isLoading && (!tickets || tickets.length === 0) && (
             <p className="text-sm text-muted-foreground">

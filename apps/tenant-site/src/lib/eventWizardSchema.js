@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-// Schema για το "add event" wizard (13/9, βλ. AddEventWizard.jsx).
+// Schema για τη φόρμα event (13/9, βλ. EventFormPage.jsx).
 //
 // time: text input με strict regex (ΟΧΙ native <input type="time">) — το
 // native time picker εμφανίζει 12ωρο (ΠΜ/ΜΜ) ανάλογα με τις ρυθμίσεις

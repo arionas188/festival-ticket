@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { Link, Outlet, useOutletContext, useParams } from "react-router-dom"
 import ProductFilters from "./ProductFilters"
 import ProductList from "./ProductList"
+import CardGridSkeleton from "@/components/ui/card-grid-skeleton"
 import { useMerchCategories } from "../../hooks/useMerchCategories"
 
 export default function MerchCategoryRoute() {
@@ -19,7 +20,18 @@ export default function MerchCategoryRoute() {
     return items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   }, [category, sortBy])
 
-  if (isLoading) return <p className="p-8 text-sm text-gray-500">Φόρτωση προϊόντων...</p>
+  if (isLoading) {
+    return (
+      <div className="bg-gray-50">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <CardGridSkeleton
+            count={4}
+            gridClassName="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2"
+          />
+        </div>
+      </div>
+    )
+  }
   if (error) return <p className="p-8 text-sm text-red-600">Σφάλμα φόρτωσης προϊόντων.</p>
 
   if (!category) {

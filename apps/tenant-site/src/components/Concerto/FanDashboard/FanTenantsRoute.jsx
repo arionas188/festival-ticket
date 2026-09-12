@@ -2,19 +2,20 @@ import { useOutletContext } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { useFanTenants, useUnfollowTenant } from "../../../queries/useFanTenants"
 import { crossTenantHref } from "../../../lib/tenantLink"
+import FanListSkeleton from "./FanListSkeleton"
 
 export default function FanTenantsRoute() {
   const { fanId } = useOutletContext()
   const { data: tenants = [], isLoading } = useFanTenants(fanId)
   const unfollow = useUnfollowTenant(fanId)
 
-  if (isLoading) return <p className="text-sm text-gray-500">Φόρτωση...</p>
-
   return (
     <div>
       <h1 className="text-lg font-semibold text-gray-900">Αγαπημένα tenants</h1>
 
-      {tenants.length === 0 ? (
+      {isLoading ? (
+        <FanListSkeleton rounded="rounded-full" />
+      ) : tenants.length === 0 ? (
         <p className="mt-4 text-sm text-gray-500">Δεν ακολουθείς κανέναν ακόμα.</p>
       ) : (
         <ul role="list" className="mt-6 divide-y divide-gray-100">

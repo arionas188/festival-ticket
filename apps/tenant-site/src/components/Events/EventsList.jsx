@@ -1,10 +1,9 @@
-import { InformationCircleIcon, MapPinIcon, TicketIcon } from '@heroicons/react/20/solid'
+import { InformationCircleIcon, MapPinIcon, PencilIcon, TicketIcon } from '@heroicons/react/20/solid'
 import { HeartIcon } from '@heroicons/react/24/outline'
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid'
 import { Link } from 'react-router-dom'
 import { getMapsUrl } from '../../lib/maps'
 import { useEventFavorites, useToggleEventFavorite } from '../../queries/useEventFavorites'
-import AddEventWizard from './AddEventWizard'
 import DeleteEventDialog from './DeleteEventDialog'
 
 // FREE / SOLD OUT (13/9, ρητό αίτημα χρήστη) — υπολογίζονται από τις
@@ -80,11 +79,12 @@ function formatDateBadge(dateString) {
 // χρήστη — δεν έχει νόημα να ανοίγει τον διάλογο αγοράς όταν δεν υπάρχει
 // τίποτα προς αγορά.
 //
-// Admin controls (13/9, ρητό αίτημα χρήστη): ΜΟΝΟ για πραγματικούς tenant
-// admins — μολύβι επεξεργασίας (ξαναχρησιμοποιεί το AddEventWizard σε edit
-// mode, βλ. AddEventWizard.jsx) + κόκκινος κάδος διαγραφής (DeleteEventDialog).
-// Κάθονται πάνω-αριστερά στην εικόνα (η καρδούλα favorite είναι πάνω-δεξιά),
-// ή σε ξεχωριστή γραμμή πάνω από τον τίτλο όταν το event δεν έχει εικόνα.
+// Admin controls: ΜΟΝΟ για πραγματικούς tenant admins — μολύβι επεξεργασίας
+// (13/9, πήγαινε σε πραγματική σελίδα edit αντί για modal, βλ. σχόλιο στο
+// EventFormPage.jsx) + κόκκινος κάδος διαγραφής (DeleteEventDialog, ΔΕΝ
+// άλλαξε — μικρό confirm modal, ποτέ δεν είχε πρόβλημα). Κάθονται
+// πάνω-αριστερά στην εικόνα (η καρδούλα favorite είναι πάνω-δεξιά), ή σε
+// ξεχωριστή γραμμή πάνω από τον τίτλο όταν το event δεν έχει εικόνα.
 export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, isAdmin, tenantId }) {
   const { data: favoriteEventIds = [] } = useEventFavorites(fanId)
   const toggleEventFavorite = useToggleEventFavorite(fanId)
@@ -110,7 +110,7 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, i
         return (
           <li
             key={event.id}
-            className="col-span-1 divide-y divide-gray-200 rounded-lg bg-white shadow-sm overflow-hidden"
+            className="col-span-1 divide-y divide-gray-200 rounded-lg bg-white shadow-md overflow-hidden"
           >
             {event.image_url && (
               <div className="relative">
@@ -121,7 +121,14 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, i
                 />
                 {isAdmin && (
                   <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                    <AddEventWizard tenantId={tenantId} event={event} />
+                    <Link
+                      to={`event/${event.slug}/edit`}
+                      title="Επεξεργασία event"
+                      aria-label="Επεξεργασία event"
+                      className="flex size-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+                    >
+                      <PencilIcon aria-hidden="true" className="size-4" />
+                    </Link>
                     <DeleteEventDialog event={event} tenantId={tenantId} />
                   </div>
                 )}
@@ -164,7 +171,14 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, i
                 )}
                 {isAdmin && !event.image_url && (
                   <div className="mt-2 flex items-center gap-1.5">
-                    <AddEventWizard tenantId={tenantId} event={event} />
+                    <Link
+                      to={`event/${event.slug}/edit`}
+                      title="Επεξεργασία event"
+                      aria-label="Επεξεργασία event"
+                      className="flex size-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+                    >
+                      <PencilIcon aria-hidden="true" className="size-4" />
+                    </Link>
                     <DeleteEventDialog event={event} tenantId={tenantId} />
                   </div>
                 )}

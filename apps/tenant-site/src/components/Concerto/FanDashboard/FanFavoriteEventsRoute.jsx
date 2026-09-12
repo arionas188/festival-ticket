@@ -1,6 +1,7 @@
 import { useOutletContext } from "react-router-dom"
 import { useFanFavoriteEvents } from "../../../queries/useFanFavoriteEvents"
 import { crossTenantHref } from "../../../lib/tenantLink"
+import FanListSkeleton from "./FanListSkeleton"
 
 function formatEventDate(dateString) {
   if (!dateString) return ""
@@ -15,13 +16,13 @@ export default function FanFavoriteEventsRoute() {
   const { fanId } = useOutletContext()
   const { data: items = [], isLoading } = useFanFavoriteEvents(fanId)
 
-  if (isLoading) return <p className="text-sm text-gray-500">Φόρτωση...</p>
-
   return (
     <div>
       <h1 className="text-lg font-semibold text-gray-900">Αγαπημένα events</h1>
 
-      {items.length === 0 ? (
+      {isLoading ? (
+        <FanListSkeleton />
+      ) : items.length === 0 ? (
         <p className="mt-4 text-sm text-gray-500">Δεν έχεις αγαπημένα events ακόμα.</p>
       ) : (
         <ul role="list" className="mt-6 divide-y divide-gray-100">

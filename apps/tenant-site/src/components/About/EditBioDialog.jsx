@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { PencilIcon } from "@heroicons/react/20/solid"
 import {
@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel, FieldError } from "@/components/ui/field"
-import { Textarea } from "@/components/ui/textarea"
+import { RichTextEditor } from "@/components/ui/rich-text-editor"
 import { tenantProfileSchema } from "../../lib/tenantProfileSchema"
+import { plainTextToHtml } from "../../lib/richText"
 import { useUpdateTenantSettings } from "../../queries/useUpdateTenantSettings"
 
 const bioSchema = tenantProfileSchema.pick({ bio: true })
@@ -20,23 +21,29 @@ const bioSchema = tenantProfileSchema.pick({ bio: true })
 // Ίδιο μοτίβο με EditCoverImageDialog.jsx (12/9, inline admin-editing) —
 // μολύβι δίπλα στο "Πληροφορίες", ορατό ΜΟΝΟ σε πραγματικούς admins αυτού
 // του tenant (βλ. InfoRoute.jsx, isAdmin από το Outlet context).
+//
+// Rich-text editor (12/9, ρητό αίτημα χρήστη — "σαν μικρό Word"): το bio
+// αποθηκεύεται πλέον ως HTML (βλ. ui/rich-text-editor.jsx). Το
+// plainTextToHtml() εδώ μετατρέπει παλιό, ήδη αποθηκευμένο plain-text bio
+// σε παραγράφους την ΠΡΩΤΗ φορά που ανοίγει ο editor πάνω του — δεν αλλάζει
+// τίποτα στη βάση από μόνο του, μόνο πώς φορτώνεται μέσα στον editor.
 export default function EditBioDialog({ tenantId, currentBio }) {
   const [open, setOpen] = useState(false)
   const updateSettings = useUpdateTenantSettings()
 
   const {
-    register,
+    control,
     handleSubmit,
     reset,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(bioSchema),
-    defaultValues: { bio: currentBio || "" },
+    defaultValues: { bio: plainTextToHtml(currentBio) },
   })
 
   function onOpenChange(nextOpen) {
     setOpen(nextOpen)
-    if (nextOpen) reset({ bio: currentBio || "" })
+    if (nextOpen) reset({ bio: plainTextToHtml(currentBio) })
   }
 
   function onSubmit(values) {
@@ -61,7 +68,13 @@ export default function EditBioDialog({ tenantId, currentBio }) {
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <Field data-invalid={!!errors.bio}>
             <FieldLabel htmlFor="bio">Κείμενο</FieldLabel>
-            <Textarea id="bio" rows={5} {...register("bio")} />
+            <Controller
+              name="bio"
+              control={control}
+              render={({ field }) => (
+                <RichTextEditor value={field.value} onChange={field.onChange} />
+              )}
+            />
             <FieldError errors={errors.bio ? [errors.bio] : undefined} />
           </Field>
           {updateSettings.isError && (

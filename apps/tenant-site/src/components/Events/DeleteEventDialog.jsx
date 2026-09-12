@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { useDeleteEvent } from "../../queries/useDeleteEvent"
+import { toast } from "sonner"
 
 // Διαγραφή event από τον tenant admin (13/9, ρητό αίτημα χρήστη —
 // "εμφανές κάδο με κόκκινο χρώμα", πραγματική διαγραφή από τη βάση, με
@@ -22,7 +23,12 @@ export default function DeleteEventDialog({ event, tenantId }) {
   function handleDelete() {
     deleteEvent.mutate(
       { eventId: event.id, tenantId },
-      { onSuccess: () => setOpen(false) },
+      {
+        onSuccess: () => {
+          setOpen(false)
+          toast.success("Το event διαγράφηκε.")
+        },
+      },
     )
   }
 

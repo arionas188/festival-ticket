@@ -1,4 +1,4 @@
-import { EnvelopeIcon, PhoneIcon, PlusIcon } from '@heroicons/react/20/solid'
+import { PlusIcon } from '@heroicons/react/20/solid'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Button } from "@/components/ui/button"
 import bandLogoFallback from '../../assets/images/MwraStiFwtia.png'
@@ -115,7 +115,13 @@ export default function Header({ tenant, settings, onRequireAuth }) {
             {isAdmin && <EditLogoImageDialog tenantId={tenant?.id} currentUrl={settings?.logo_url} />}
           </div>
 
-          <div className="mb-1 flex flex-1 items-center gap-3">
+          {/* flex-wrap safety net (14/9, μέρος του ίδιου responsive fix
+              παραπάνω): σε πολύ στενές οθόνες (~360px) το follow button +
+              τα 3 εικονίδια (search/αγαπημένα/καλάθι) μαζί δεν χωράνε σε
+              μία γραμμή — πριν αυτό προκαλούσε οριζόντιο overflow (και άρα
+              zoom-out σε όλη τη σελίδα). Με flex-wrap, αν ποτέ δεν χωρέσει,
+              περνάει απλά σε δεύτερη γραμμή αντί να ξεχειλίζει την οθόνη. */}
+          <div className="mb-1 flex flex-1 flex-wrap items-center gap-3 gap-y-2">
             {isLoggedIn ? (
               <>
                 {/* Search/favorite/καλάθι ξεκλειδώνουν με το global login
@@ -168,7 +174,22 @@ export default function Header({ tenant, settings, onRequireAuth }) {
           )}
         </div>
 
-        <div className="mt-6 flex items-center gap-2">
+        {/* border-b κάτω από τα tabs (14/9, ρητό αίτημα χρήστη) — μια απλή
+            γραμμή που ξεχωρίζει οπτικά πού τελειώνουν τα κουμπιά
+            Πληροφορίες/Εκδηλώσεις/Merch Store και πού ξεκινάει το
+            περιεχόμενο της κάθε καρτέλας από κάτω.
+            grid grid-cols-3 (14/9, bug fix — ρητή αναφορά χρήστη: "σε
+            κινητό με 360px πλάτος φαίνεται μικρότερο και έχει κενό"):
+            πριν ήταν flex με shrink-0 (default του Button) + whitespace-
+            nowrap + px-4 σταθερό — τα 3 pill buttons μαζί ξεπερνούσαν τα
+            ~328px διαθέσιμου πλάτους σε στενά κινητά (το "Merch Store"
+            έκοβε κυριολεκτικά έξω από την οθόνη). Αυτό έκανε ΟΛΗ τη
+            σελίδα πλατύτερη από το viewport, οπότε το κινητό zoom-out-άρει
+            αυτόματα ΟΛΟΚΛΗΡΗ τη σελίδα για να χωρέσει — απ' αυτό η
+            εντύπωση "όλο το site φαίνεται μικρότερο + κενό στο πλάι".
+            Grid 3 ίσων στηλών εγγυάται ότι ΠΟΤΕ δεν ξεπερνάνε το πλάτος
+            του container, ό,τι μήκος κειμένου κι αν έχουν. */}
+        <div className="mt-6 grid grid-cols-3 items-center gap-1.5 border-b border-gray-200 pb-4 sm:gap-2">
           {TABS.map((tab) => (
             <Button
               key={tab}
@@ -176,8 +197,8 @@ export default function Header({ tenant, settings, onRequireAuth }) {
               aria-pressed={activeTab === tab}
               className={
                 activeTab === tab
-                  ? "rounded-full bg-green-600 px-4 text-white hover:bg-green-700"
-                  : "rounded-full bg-white px-4 text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50"
+                  ? "w-full min-w-0 truncate rounded-full bg-green-600 px-2 text-xs text-white hover:bg-green-700 sm:px-4 sm:text-sm"
+                  : "w-full min-w-0 truncate rounded-full bg-white px-2 text-xs text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50 sm:px-4 sm:text-sm"
               }
             >
               {tab}
@@ -198,26 +219,14 @@ export default function Header({ tenant, settings, onRequireAuth }) {
               tenantType: tenant?.type,
               tenantBio,
               galleryUrls: settings?.gallery_urls,
+              // 13/9, ρητό αίτημα χρήστη: αν ο admin δεν ανεβάσει εικόνα σε
+              // ένα event, να μπαίνει default το cover image του tenant —
+              // βλ. EventFormPage.jsx. Ήδη φορτωμένο εδώ (settings), καμία
+              // επιπλέον κλήση.
+              coverImageUrl: settings?.cover_image_url,
               isAdmin,
             }}
           />
-        </div>
-
-        <div className="mt-8 mb-6 flex gap-3">
-          <button
-            type="button"
-            className="inline-flex justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50"
-          >
-            <EnvelopeIcon aria-hidden="true" className="mr-1.5 -ml-0.5 size-5 text-gray-400" />
-            <span>Message</span>
-          </button>
-          <button
-            type="button"
-            className="inline-flex justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xs inset-ring inset-ring-gray-300 hover:bg-gray-50"
-          >
-            <PhoneIcon aria-hidden="true" className="mr-1.5 -ml-0.5 size-5 text-gray-400" />
-            <span>Call</span>
-          </button>
         </div>
       </div>
 

@@ -13,7 +13,7 @@ import { supabase } from "../lib/supabase"
 // "ορφανό" event χωρίς εισιτήρια στη βάση.
 //
 // values.tickets εδώ είναι ΜΟΝΟ οι επιλεγμένοι (checked) τύποι εισιτηρίων
-// — το φιλτράρισμα γίνεται στο AddEventWizard πριν το mutate, ώστε αυτό το
+// — το φιλτράρισμα γίνεται στο EventFormPage πριν το mutate, ώστε αυτό το
 // hook να μένει απλό (απλά γράφει ό,τι του δοθεί).
 export function useCreateEvent() {
   const queryClient = useQueryClient()

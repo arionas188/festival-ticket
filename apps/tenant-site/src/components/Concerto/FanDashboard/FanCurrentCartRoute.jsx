@@ -1,6 +1,7 @@
 import { useOutletContext } from "react-router-dom"
 import { useFanCart } from "../../../queries/useFanCart"
 import { crossTenantHref } from "../../../lib/tenantLink"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // Πραγματική λειτουργικότητα πλέον (πριν ήταν placeholder) — δείχνει ό,τι
 // έχει ήδη ο fan στο καλάθι του, ομαδοποιημένο ΑΝΑ tenant (βλ.
@@ -11,13 +12,33 @@ export default function FanCurrentCartRoute() {
   const { fanId } = useOutletContext()
   const { data: groups = [], isLoading } = useFanCart(fanId)
 
-  if (isLoading) return <p className="text-sm text-gray-500">Φόρτωση...</p>
-
   return (
     <div>
       <h1 className="text-lg font-semibold text-gray-900">Τρέχον καλάθι</h1>
 
-      {groups.length === 0 ? (
+      {isLoading ? (
+        <div className="mt-6 flex flex-col gap-6">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="rounded-md border border-gray-200 p-4">
+              <div className="flex items-center gap-2">
+                <Skeleton className="size-8 shrink-0 rounded-full" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+              <div className="mt-3 flex flex-col gap-3">
+                {Array.from({ length: 2 }).map((__, j) => (
+                  <div key={j} className="flex items-center gap-3">
+                    <Skeleton className="size-12 shrink-0 rounded-md" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Skeleton className="h-4 w-2/3" />
+                      <Skeleton className="h-3 w-1/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : groups.length === 0 ? (
         <p className="mt-4 text-sm text-gray-500">
           Δεν έχεις τίποτα στο καλάθι σου αυτή τη στιγμή, σε κανένα tenant.
         </p>

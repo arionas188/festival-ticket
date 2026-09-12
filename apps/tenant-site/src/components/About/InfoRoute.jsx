@@ -28,10 +28,16 @@ export default function InfoRoute() {
         Πληροφορίες
         {isAdmin && <EditBioDialog tenantId={tenantId} currentBio={tenantBio} />}
       </h2>
+      {/* Το bio είναι πλέον HTML (Tiptap rich-text editor, 12/9, βλ.
+          EditBioDialog.jsx) — dangerouslySetInnerHTML εδώ επίτηδες, όχι
+          plain text. Ασφαλές γιατί το ΜΟΝΟ σημείο που γράφει bio είναι ο
+          Tiptap editor (StarterKit, χωρίς extension για raw HTML/scripts),
+          ΠΟΤΕ δεν περνάει εδώ κείμενο από αλλού/από επισκέπτη. */}
       {tenantBio && (
-        <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">
-          {tenantBio}
-        </p>
+        <div
+          className="text-sm leading-relaxed text-gray-700 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5"
+          dangerouslySetInnerHTML={{ __html: tenantBio }}
+        />
       )}
       {tenantType === "artist" && (
         <BandMembers members={members} />

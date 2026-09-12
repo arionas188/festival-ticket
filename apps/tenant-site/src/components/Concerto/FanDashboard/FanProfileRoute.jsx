@@ -18,6 +18,7 @@ import {
 import { useFanTenants } from "../../../queries/useFanTenants"
 import FanIdCard from "./FanIdCard"
 import FavoriteTenantsPicker from "./FavoriteTenantsPicker"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // Σπάει το αποθηκευμένο, ενιαίο "+30691..." σε {phoneCountry, phoneNumber}
 // για τη φόρμα — η βάση κρατάει ΜΙΑ τιμή (ήδη σε μορφή κλήσιμη, βλ.
@@ -161,7 +162,19 @@ export default function FanProfileRoute() {
 
   const savedPhone = combinePhone(liveValues.phoneCountry, liveValues.phoneNumber)
 
-  if (fanLoading) return <p className="text-sm text-gray-500">Φόρτωση...</p>
+  if (fanLoading) {
+    return (
+      <div className="max-w-md">
+        <h1 className="text-lg font-semibold text-gray-900">Προφίλ</h1>
+        <div className="pb-4">
+          <Skeleton className="mt-4 h-48 w-full rounded-lg" />
+        </div>
+        <div className="flex justify-center">
+          <Skeleton className="h-9 w-40 rounded-lg" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-md">
@@ -212,7 +225,14 @@ export default function FanProfileRoute() {
           className="mt-4 space-y-4 rounded-lg border border-gray-200 p-4"
         >
           {profileLoading ? (
-            <p className="text-sm text-gray-500">Φόρτωση...</p>
+            <div className="space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-8 w-full rounded-lg" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <Field data-invalid={!!errors.firstName}>

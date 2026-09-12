@@ -1,7 +1,7 @@
 import * as React from "react"
 import { cva } from "class-variance-authority";
-
 import { cn } from "@/lib/utils"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -18,8 +18,9 @@ function InputGroup({
         "group/input-group relative flex h-8 w-full min-w-0 items-center rounded-lg border border-input transition-colors outline-none in-data-[slot=combobox-content]:focus-within:border-inherit in-data-[slot=combobox-content]:focus-within:ring-0 has-disabled:bg-input/50 has-disabled:opacity-50 has-[[data-slot=input-group-control]:focus-visible]:border-ring has-[[data-slot=input-group-control]:focus-visible]:ring-3 has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-3 has-[[data-slot][aria-invalid=true]]:ring-destructive/20 has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto dark:bg-input/30 dark:has-disabled:bg-input/80 dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40 has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
         className
       )}
-      {...props} />
-  );
+      {...props}
+    />
+  )
 }
 
 const inputGroupAddonVariants = cva(
@@ -60,24 +61,28 @@ function InputGroupAddon({
         }
         e.currentTarget.parentElement?.querySelector("input")?.focus()
       }}
-      {...props} />
+      {...props}
+    />
   );
 }
 
-const inputGroupButtonVariants = cva("flex items-center gap-2 text-sm shadow-none", {
-  variants: {
-    size: {
-      xs: "h-6 gap-1 rounded-[calc(var(--radius)-3px)] px-1.5 [&>svg:not([class*='size-'])]:size-3.5",
-      sm: "",
-      "icon-xs":
-        "size-6 rounded-[calc(var(--radius)-3px)] p-0 has-[>svg]:p-0",
-      "icon-sm": "size-8 p-0 has-[>svg]:p-0",
+const inputGroupButtonVariants = cva(
+  "flex items-center gap-2 text-sm shadow-none",
+  {
+    variants: {
+      size: {
+        xs: "h-6 gap-1 rounded-[calc(var(--radius)-3px)] px-1.5 [&>svg:not([class*='size-'])]:size-3.5",
+        sm: "",
+        "icon-xs":
+          "size-6 rounded-[calc(var(--radius)-3px)] p-0 has-[>svg]:p-0",
+        "icon-sm": "size-8 p-0 has-[>svg]:p-0",
+      },
     },
-  },
-  defaultVariants: {
-    size: "xs",
-  },
-})
+    defaultVariants: {
+      size: "xs",
+    },
+  }
+)
 
 function InputGroupButton({
   className,
@@ -92,8 +97,9 @@ function InputGroupButton({
       data-size={size}
       variant={variant}
       className={cn(inputGroupButtonVariants({ size }), className)}
-      {...props} />
-  );
+      {...props}
+    />
+  )
 }
 
 function InputGroupText({
@@ -106,8 +112,9 @@ function InputGroupText({
         "flex items-center gap-2 text-sm text-muted-foreground [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4",
         className
       )}
-      {...props} />
-  );
+      {...props}
+    />
+  )
 }
 
 function InputGroupInput({
@@ -121,8 +128,9 @@ function InputGroupInput({
         "flex-1 rounded-none border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0 disabled:bg-transparent aria-invalid:ring-0 dark:bg-transparent dark:disabled:bg-transparent",
         className
       )}
-      {...props} />
-  );
+      {...props}
+    />
+  )
 }
 
 function InputGroupTextarea({
@@ -136,8 +144,9 @@ function InputGroupTextarea({
         "flex-1 resize-none rounded-none border-0 bg-transparent py-2 shadow-none ring-0 focus-visible:ring-0 disabled:bg-transparent aria-invalid:ring-0 dark:bg-transparent dark:disabled:bg-transparent",
         className
       )}
-      {...props} />
-  );
+      {...props}
+    />
+  )
 }
 
 export {

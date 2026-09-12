@@ -1,5 +1,6 @@
 import { Navigate, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom"
 import ProductQuickShop from "./ProductQuickShop"
+import LoadingDialog from "@/components/ui/loading-dialog"
 import { useProducts } from "../../queries/useProducts"
 import { isUuid } from "../../lib/isUuid"
 
@@ -23,7 +24,7 @@ export default function ProductModalRoute() {
     navigate(-1)
   }
 
-  if (isLoading) return null
+  if (isLoading) return <LoadingDialog onOpenChange={(open) => !open && handleClose()} />
 
   // Δέχεται είτε UUID (παλιά, ήδη κοινοποιημένα links) είτε slug (νέα links).
   const product = products?.find((p) =>

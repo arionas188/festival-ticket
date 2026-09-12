@@ -1,0 +1,660 @@
+import { useEffect, useRef, useState } from "react"
+import { useForm, useFieldArray } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useNavigate } from "react-router-dom"
+import { MapPinIcon, PhotoIcon, PlusIcon, TrashIcon } from "@heroicons/react/20/solid"
+import { Button } from "@/components/ui/button"
+import { Field, FieldLabel, FieldError } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Combobox } from "@/components/ui/combobox"
+import { Progress } from "@/components/ui/progress"
+import LocationMapPreview from "./LocationMapPreview"
+import { toast } from "sonner"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group"
+import { eventWizardSchema } from "../../lib/eventWizardSchema"
+import { useUploadTenantImage } from "../../queries/useUploadTenantImage"
+import { useCreateEvent } from "../../queries/useCreateEvent"
+import { useUpdateEvent } from "../../queries/useUpdateEvent"
+import LocationPickerDialog from "./LocationPickerDialog"
+
+const ACCEPTED_TYPES = "image/jpeg,image/png,image/webp,image/gif"
+
+// Ποια πεδία επικυρώνονται πριν επιτραπεί το "Επόμενο" σε κάθε βήμα.
+const STEP_FIELDS = {
+  1: ["title", "description", "date", "time", "location"],
+}
+
+// Ονόματα ανά preset τύπο (13/9, ρητό αίτημα χρήστη — dropdown ανά
+// "κατηγορία εισιτηρίου", ΟΧΙ checkboxes). "free" είναι η προεπιλογή κάθε
+// νέας κατηγορίας — όσο μένει έτσι, τιμή/ποσότητα είναι κλειδωμένα
+// (0€ / 100, μη επεξεργάσιμα). Ο admin μπορεί να ανοίξει το dropdown και
+// να διαλέξει κάτι άλλο (ή "Άλλο" για δικό του όνομα), οπότε ξεκλειδώνουν
+// τα δύο πεδία γι' αυτή τη γραμμή. Πολλές κατηγορίες ταυτόχρονα
+// επιτρέπονται — "+ Πρόσθεσε άλλη κατηγορία" προσθέτει ακόμα μία, με τη
+// δική της, ανεξάρτητη προεπιλογή "free".
+const TYPE_LABELS = {
+  free: "Ελεύθερη είσοδος",
+  early_bird: "Early Bird",
+  general: "Γενική είσοδος",
+  vip: "VIP",
+}
+
+// Combobox options για το dropdown κατηγορίας εισιτηρίου (12/9 — αντικατέστησε
+// το παλιό Select). Ίδιες τιμές με TYPE_LABELS + "custom" στο τέλος.
+const TICKET_TYPE_OPTIONS = [
+  { value: "free", label: TYPE_LABELS.free },
+  { value: "early_bird", label: TYPE_LABELS.early_bird },
+  { value: "general", label: TYPE_LABELS.general },
+  { value: "vip", label: TYPE_LABELS.vip },
+  { value: "custom", label: "Άλλο (γράψε δικό σου όνομα)" },
+]
+
+function makeTicketGroup(overrides = {}) {
+  return {
+    key: `group-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    typeKey: "free",
+    label: TYPE_LABELS.free,
+    price: "0",
+    quantity: "100",
+    ...overrides,
+  }
+}
+
+// Ακέραιο, χωρίς δεκαδικά, χωρίς αρνητικό/κενό — ρητό αίτημα χρήστη: αν
+// γράψει "090" να γίνεται αυτόματα "90", αν γράψει "10,01" ή "10.01" να
+// γίνεται "10" (parseInt κόβει στο πρώτο μη-ψηφίο, ήδη αγνοεί τα leading
+// zeros). Εφαρμόζεται onBlur σε τιμή/ποσότητα, όχι onChange (να μην
+// πειράζει τον χρήστη ενώ γράφει).
+function sanitizeToInteger(raw, min) {
+  const n = Number.parseInt(raw, 10)
+  if (Number.isNaN(n) || n < min) return min
+  return n
+}
+
+// Ανάστροφη αναζήτηση typeKey από το αποθηκευμένο όνομα ενός ticket (edit
+// mode) — αν το όνομα ταιριάζει ακριβώς με κάποιο preset label, ξέρουμε
+// ποιο dropdown option να δείξει επιλεγμένο· αλλιώς είναι "custom".
+function inferTypeKey(name) {
+  const entry = Object.entries(TYPE_LABELS).find(([, label]) => label === name)
+  return entry ? entry[0] : "custom"
+}
+
+function ticketsFromEvent(event) {
+  const rows = (event.tickets || [])
+    .slice()
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((t) => ({
+      key: `existing-${t.id}`,
+      typeKey: inferTypeKey(t.name),
+      label: t.name,
+      price: String(t.price),
+      quantity: String(t.quantity),
+    }))
+  return rows.length > 0 ? rows : [makeTicketGroup()]
+}
+
+function dateTimeFromEvent(event) {
+  if (!event?.date) return { date: "", time: "" }
+  const d = new Date(event.date)
+  const pad = (n) => String(n).padStart(2, "0")
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  }
+}
+
+// Χτίζει τις αρχικές τιμές της φόρμας — άδειες για δημιουργία, ή γεμάτες
+// από το υπάρχον event σε edit mode (βλ. props.event παρακάτω).
+function buildDefaultValues(event) {
+  if (!event) {
+    return {
+      title: "",
+      description: "",
+      date: "",
+      time: "",
+      location: "",
+      locationUrl: "",
+      latitude: null,
+      longitude: null,
+      tickets: [makeTicketGroup()],
+    }
+  }
+  const { date, time } = dateTimeFromEvent(event)
+  return {
+    title: event.title || "",
+    description: event.description || "",
+    date,
+    time,
+    location: event.location || "",
+    locationUrl: event.location_url || "",
+    latitude: event.latitude ?? null,
+    longitude: event.longitude ?? null,
+    tickets: ticketsFromEvent(event),
+  }
+}
+
+// Βήμα-βήμα δημιουργία/επεξεργασία event από τον tenant admin — ΠΡΑΓΜΑΤΙΚΗ
+// σελίδα (13/9, ρητό αίτημα χρήστη), όχι πλέον Dialog/modal. Πριν ήταν
+// modal (AddEventWizard.jsx) — αφαιρέθηκε ρητά επειδή ένα 4-βημάτων wizard
+// με εικόνα, Google Maps picker και δυναμική λίστα εισιτηρίων είναι ούτως
+// ή άλλως πιο άνετο σαν σελίδα, και επειδή έλυνε οριστικά μια ολόκληρη
+// κατηγορία mobile bugs (πληκτρολόγιο vs fixed modal) που δεν άξιζε να
+// κυνηγάμε άλλο για αυτό συγκεκριμένα το feature — το scroll είναι πλέον
+// το φυσικό scroll της σελίδας, το ίδιο που ήδη δουλεύει παντού αλλού.
+// Τα μικρά modals (LocationPickerDialog εδώ μέσα, DeleteEventDialog) ΔΕΝ
+// άλλαξαν — δεν είχαν ποτέ πρόβλημα, είναι μικρά, χωρίς σοβαρό scroll.
+//
+// Ίδια λογική με πριν, αμετάβλητη: δύο λειτουργίες στο ίδιο component
+// (χωρίς prop `event` → δημιουργία, με prop `event` → επεξεργασία,
+// προσυμπληρωμένη). Καλείται από το EventFormRoute.jsx (routing/data
+// fetching), βλ. εκεί.
+//
+// 4 βήματα: 1) βασικά στοιχεία (ώρα ως 24ωρο κείμενο· τοποθεσία μέσω
+// πραγματικής αναζήτησης Google Maps, LocationPickerDialog.jsx —
+// αποθηκεύει ΚΑΙ lat/lng για μελλοντικό feature "events κοντά μου"),
+// 2) εικόνα (προαιρετική), 3) κατηγορίες εισιτηρίων (dropdown ανά
+// κατηγορία, βλ. TYPE_LABELS, με ενδιάμεση οθόνη επιβεβαίωσης πριν
+// προχωρήσει), 4) review + αποθήκευση.
+export default function EventFormPage({ tenantId, event = null, coverImageUrl = null }) {
+  const isEditMode = !!event
+  const navigate = useNavigate()
+  const [step, setStep] = useState(1)
+  const [confirmingTickets, setConfirmingTickets] = useState(false)
+  const [file, setFile] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false)
+  const [ticketSelectionError, setTicketSelectionError] = useState(null)
+  const [submitError, setSubmitError] = useState(null)
+  const inputRef = useRef(null)
+
+  const uploadImage = useUploadTenantImage()
+  const createEvent = useCreateEvent()
+  const updateEvent = useUpdateEvent()
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    trigger,
+    watch,
+    setValue,
+    getValues,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(eventWizardSchema),
+    defaultValues: buildDefaultValues(event),
+  })
+
+  const { fields, append, remove, replace } = useFieldArray({ control, name: "tickets" })
+  const ticketValues = watch("tickets") || []
+  const pickedLocation = watch("location")
+  // Για το preview χάρτη κάτω από το πεδίο Τοποθεσία (13/9, ρητό αίτημα
+  // χρήστη) — ήδη στη φόρμα από το handleLocationSelected, καμία νέα κλήση.
+  const pickedLatitude = watch("latitude")
+  const pickedLongitude = watch("longitude")
+
+  // Το ίδιο register("time") props (name/onBlur/ref) αλλά με δικό μας
+  // onChange από κάτω (βλ. handleTimeChange) — έτσι κρατάμε το πεδίο
+  // registered στο react-hook-form χωρίς να το κάνουμε πλήρως controlled.
+  const timeField = register("time")
+
+  // Καθαρίζει το προσωρινό blob URL preview — ίδιο pattern με
+  // EditCoverImageDialog/EditLogoImageDialog.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    }
+  }, [previewUrl])
+
+  function handleCancel() {
+    navigate("/events")
+  }
+
+  // Αυτόματη εισαγωγή ":" μετά τα 2 πρώτα ψηφία (12/9, ρητό αίτημα χρήστη
+  // — live mobile test): σε κινητό το πληκτρολόγιο πάνω σε inputMode="numeric"
+  // δεν έχει κουμπί ":", οπότε ο χρήστης δεν μπορούσε να ολοκληρώσει ποτέ
+  // τη μορφή "21:00" μόνος του. Τώρα γράφει μόνο ψηφία ("2100") και το
+  // πεδίο μόνο του σχηματίζει "21:00" καθώς πληκτρολογεί — το ίδιο μοτίβο
+  // με τα πεδία λήξης καρτών. Το zod regex (^([01]\d|2[0-3]):[0-5]\d$)
+  // παραμένει το τελικό safety net στο submit.
+  function handleTimeChange(event_) {
+    const digits = event_.target.value.replace(/\D/g, "").slice(0, 4)
+    const formatted = digits.length >= 3 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits
+    event_.target.value = formatted
+    timeField.onChange(event_)
+  }
+
+  function handleFileChange(event_) {
+    const selected = event_.target.files?.[0]
+    if (!selected) return
+    setFile(selected)
+    setPreviewUrl(URL.createObjectURL(selected))
+  }
+
+  function handleLocationSelected({ location, locationUrl, latitude, longitude }) {
+    setValue("location", location, { shouldValidate: true })
+    setValue("locationUrl", locationUrl)
+    setValue("latitude", latitude)
+    setValue("longitude", longitude)
+  }
+
+  // Αλλαγή κατηγορίας μέσα σε ΜΙΑ γραμμή εισιτηρίου — "free" κλειδώνει
+  // τιμή/ποσότητα (0€ / 100), "custom" αδειάζει το όνομα για να το γράψει
+  // ο admin, οι υπόλοιπες βάζουν το σταθερό όνομά τους και ξεκλειδώνουν
+  // τα πεδία με λογικές default τιμές (0€, ποσότητα 1 — ο admin τις
+  // αλλάζει).
+  //
+  // Κανόνας επιχείρησης (ρητό αίτημα χρήστη, 13/9): η "Ελεύθερη είσοδος"
+  // δεν συνυπάρχει με άλλη κατηγορία — μόλις ο admin επιλέξει οτιδήποτε
+  // άλλο (early bird/γενική/vip/custom) σε ΟΠΟΙΑΔΗΠΟΤΕ γραμμή, κάθε ΑΛΛΗ
+  // γραμμή που είναι ακόμα σε "free" αφαιρείται αυτόματα — replace() στο
+  // field array αντί για remove() ανά index, ώστε να μη μπερδεύονται τα
+  // indices μέσα στο ίδιο render.
+  function handleTypeChange(index, typeKey) {
+    if (typeKey === "free") {
+      setValue(`tickets.${index}.typeKey`, "free")
+      setValue(`tickets.${index}.label`, TYPE_LABELS.free)
+      setValue(`tickets.${index}.price`, "0")
+      setValue(`tickets.${index}.quantity`, "100")
+      return
+    }
+
+    const current = getValues("tickets")
+    const updated = current.map((row, i) =>
+      i === index
+        ? {
+            ...row,
+            typeKey,
+            label: typeKey === "custom" ? "" : TYPE_LABELS[typeKey] || "",
+            price: "0",
+            quantity: "1",
+          }
+        : row,
+    )
+    const survivors = updated.filter((row, i) => i === index || row.typeKey !== "free")
+    replace(survivors)
+  }
+
+  function handleQuantityBlur(index, event_) {
+    const n = sanitizeToInteger(event_.target.value, 1)
+    setValue(`tickets.${index}.quantity`, String(n), { shouldValidate: true })
+  }
+
+  function handlePriceBlur(index, event_) {
+    const n = sanitizeToInteger(event_.target.value, 0)
+    setValue(`tickets.${index}.price`, String(n), { shouldValidate: true })
+  }
+
+  async function goNext() {
+    const fieldsToValidate = STEP_FIELDS[step]
+    if (fieldsToValidate) {
+      const valid = await trigger(fieldsToValidate)
+      if (!valid) return
+    }
+
+    // Βήμα 3 (εισιτήρια): πριν προχωρήσει, δείχνει μια ενδιάμεση οθόνη
+    // επιβεβαίωσης (ρητό αίτημα χρήστη — "να του βγάζει τι έχει γράψει
+    // και αν είναι σίγουρος").
+    if (step === 3 && !confirmingTickets) {
+      const valid = await trigger("tickets")
+      if (!valid) {
+        setTicketSelectionError("Έλεγξε τις κατηγορίες εισιτηρίων — λείπει όνομα, τιμή ή ποσότητα.")
+        return
+      }
+      setTicketSelectionError(null)
+      setConfirmingTickets(true)
+      return
+    }
+
+    setStep((s) => s + 1)
+  }
+
+  function goBack() {
+    if (confirmingTickets) {
+      setConfirmingTickets(false)
+      return
+    }
+    if (step === 1) {
+      handleCancel()
+      return
+    }
+    setStep((s) => s - 1)
+  }
+
+  async function onSubmit(values) {
+    setSubmitError(null)
+    try {
+      let imageUrl = isEditMode ? event.image_url : null
+      if (file) {
+        imageUrl = await uploadImage.mutateAsync({ tenantId, file, prefix: "event" })
+      }
+      // Χωρίς event-specific εικόνα (ούτε ήδη αποθηκευμένη, ούτε νέο
+      // upload) — default στο cover image του tenant, 13/9 ρητό αίτημα
+      // χρήστη.
+      if (!imageUrl) {
+        imageUrl = coverImageUrl || null
+      }
+      if (isEditMode) {
+        await updateEvent.mutateAsync({ eventId: event.id, tenantId, values, imageUrl })
+        toast.success("Το event ενημερώθηκε.")
+      } else {
+        await createEvent.mutateAsync({ tenantId, values, imageUrl })
+        toast.success("Το event καταχωρήθηκε.")
+      }
+      navigate("/events")
+    } catch (err) {
+      setSubmitError(err.message)
+    }
+  }
+
+  const isSaving = uploadImage.isPending || createEvent.isPending || updateEvent.isPending
+  const capacity = ticketValues.reduce((sum, t) => sum + (Number(t.quantity) || 0), 0)
+  // Ίδια λογική fallback και εδώ (live preview) — ώστε ο admin να ΒΛΕΠΕΙ
+  // ότι θα μπει το cover image, όχι μόνο να το ανακαλύψει μετά το save.
+  const currentImageUrl =
+    previewUrl || (isEditMode ? event.image_url : null) || coverImageUrl
+
+  return (
+    // Απαλό γκρι, στρογγυλεμένο φόντο γύρω από όλο το wizard (14/9, ρητό
+    // αίτημα χρήστη, ίδιο ύφος με τη λίστα events) — έτσι η λευκή bordered
+    // "κάρτα" του κάθε βήματος παρακάτω φαίνεται πραγματικά ξεχωριστή/με
+    // βάθος αντί να χάνεται πάνω σε λευκό φόντο.
+    <div className="mx-auto flex max-w-xl flex-col gap-4 rounded-2xl bg-gray-50 p-4 pb-24 sm:p-6">
+      {/* Progress bar για τα 4 βήματα (12/9, μεγαλύτερο + ποσοστό δίπλα
+          13/9 ρητό αίτημα χρήστη — πιο εμφανές, ώστε να καταλαβαίνει ο
+          admin πόσο κοντά είναι στο τέλος). Το confirmingTickets είναι
+          ουσιαστικά ένα ενδιάμεσο "βήμα 3.5" (οθόνη επιβεβαίωσης πριν το
+          τελικό βήμα), οπότε μετράει λίγο παραπάνω από το κανονικό βήμα 3. */}
+      <div className="flex items-center gap-2">
+        <Progress value={((confirmingTickets ? step + 0.5 : step) / 4) * 100} className="h-2.5" />
+        <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+          {Math.round(((confirmingTickets ? step + 0.5 : step) / 4) * 100)}%
+        </span>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        {/* Ένα ενιαίο bordered "card" γύρω από ΟΛΟ το περιεχόμενο του
+            τρέχοντος βήματος (13/9, ρητό αίτημα χρήστη) — κυκλικές γωνίες +
+            shadow. Τα κουμπιά πλοήγησης (Πίσω/Ακύρωση/Επόμενο) μένουν ΕΞΩ
+            από αυτό, στην κάτω μπάρα παρακάτω. */}
+        <div className="flex flex-col gap-4 rounded-xl border border-gray-200 p-4 shadow-sm sm:p-5">
+        {step === 1 && (
+          <>
+            <Field data-invalid={!!errors.title}>
+              <FieldLabel htmlFor="title">Τίτλος</FieldLabel>
+              <Input id="title" placeholder="π.χ. Live στο ΣΤΡΑΦΙ" {...register("title")} />
+              <FieldError errors={errors.title ? [errors.title] : undefined} />
+            </Field>
+
+            <Field data-invalid={!!errors.description}>
+              <FieldLabel htmlFor="description">Περιγραφή</FieldLabel>
+              <Textarea id="description" rows={3} {...register("description")} />
+              <FieldError errors={errors.description ? [errors.description] : undefined} />
+            </Field>
+
+            <div className="flex gap-2">
+              <Field data-invalid={!!errors.date} className="flex-1">
+                <FieldLabel htmlFor="date">Ημερομηνία</FieldLabel>
+                <Input id="date" type="date" {...register("date")} />
+                <FieldError errors={errors.date ? [errors.date] : undefined} />
+              </Field>
+
+              <Field data-invalid={!!errors.time} className="w-28">
+                <FieldLabel htmlFor="time">Ώρα (24ωρο)</FieldLabel>
+                <Input
+                  id="time"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="--:--"
+                  maxLength={5}
+                  {...timeField}
+                  onChange={handleTimeChange}
+                />
+                <FieldError errors={errors.time ? [errors.time] : undefined} />
+              </Field>
+            </div>
+
+            <Field data-invalid={!!errors.location}>
+              <FieldLabel>Τοποθεσία</FieldLabel>
+              {pickedLocation ? (
+                <div className="flex items-center justify-between gap-2 rounded-md border border-gray-200 p-2.5">
+                  <span className="flex items-center gap-1.5 text-sm text-foreground">
+                    <MapPinIcon aria-hidden="true" className="size-4 shrink-0 text-gray-400" />
+                    {pickedLocation}
+                  </span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setLocationPickerOpen(true)}>
+                    Άλλαξε
+                  </Button>
+                </div>
+              ) : (
+                <Button type="button" variant="outline" onClick={() => setLocationPickerOpen(true)}>
+                  <MapPinIcon aria-hidden="true" className="mr-1.5 size-4" />
+                  Αναζήτηση στο Google Maps
+                </Button>
+              )}
+              <LocationMapPreview
+                latitude={pickedLatitude}
+                longitude={pickedLongitude}
+                className="mt-2"
+              />
+              <FieldError errors={errors.location ? [errors.location] : undefined} />
+            </Field>
+
+            <LocationPickerDialog
+              open={locationPickerOpen}
+              onOpenChange={setLocationPickerOpen}
+              onSelect={handleLocationSelected}
+            />
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <p className="text-sm text-muted-foreground">Εικόνα event (προαιρετικό).</p>
+            {currentImageUrl && (
+              <img alt="" src={currentImageUrl} className="h-32 w-full rounded-lg object-cover" />
+            )}
+            <input
+              ref={inputRef}
+              type="file"
+              accept={ACCEPTED_TYPES}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}>
+              <PhotoIcon aria-hidden="true" className="mr-1.5 size-4" />
+              {file ? file.name : isEditMode && event.image_url ? "Άλλαξε εικόνα" : "Επίλεξε εικόνα"}
+            </Button>
+            {/* 13/9, ρητό αίτημα χρήστη: όταν δεν υπάρχει καμία δική του
+                εικόνα (ούτε νέο upload, ούτε ήδη αποθηκευμένη σε edit mode),
+                δείχνουμε ΡΗΤΑ ότι θα μπει το cover image του tenant — να το
+                βλέπει, όχι να το ανακαλύψει μετά. */}
+            {!file && !(isEditMode && event.image_url) && coverImageUrl && (
+              <p className="text-xs text-muted-foreground">
+                Δεν έχεις επιλέξει εικόνα — θα χρησιμοποιηθεί το cover image του tenant σου (πάνω).
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">JPG, PNG, WEBP ή GIF, έως 5MB.</p>
+          </>
+        )}
+
+        {step === 3 && !confirmingTickets && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Κατηγορίες εισιτηρίων — η προεπιλογή είναι ελεύθερη είσοδος. Άνοιξε το μενού
+              για να διαλέξεις κάτι άλλο.
+            </p>
+
+            {fields.map((field, index) => {
+              const typeKey = watch(`tickets.${index}.typeKey`)
+              const isFree = typeKey === "free"
+              return (
+                <div
+                  key={field.id}
+                  className="flex flex-col gap-2 rounded-md border border-gray-200 p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <Combobox
+                      options={TICKET_TYPE_OPTIONS}
+                      value={typeKey}
+                      onValueChange={(val) => handleTypeChange(index, val)}
+                      triggerClassName="flex-1"
+                    />
+                    {fields.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => remove(index)}
+                        aria-label="Αφαίρεση κατηγορίας"
+                      >
+                        <TrashIcon aria-hidden="true" className="size-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+
+                  {typeKey === "custom" && (
+                    <Field data-invalid={!!errors.tickets?.[index]?.label}>
+                      <Input
+                        placeholder="Όνομα εισιτηρίου, π.χ. Backstage"
+                        {...register(`tickets.${index}.label`)}
+                      />
+                      <FieldError
+                        errors={errors.tickets?.[index]?.label ? [errors.tickets[index].label] : undefined}
+                      />
+                    </Field>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Field className="flex-1">
+                      <FieldLabel htmlFor={`tickets.${index}.quantity`}>Ποσότητα</FieldLabel>
+                      <Input
+                        id={`tickets.${index}.quantity`}
+                        type="text"
+                        inputMode="numeric"
+                        disabled={isFree}
+                        {...register(`tickets.${index}.quantity`)}
+                        onBlur={(e) => handleQuantityBlur(index, e)}
+                      />
+                    </Field>
+                    <Field className="flex-1">
+                      <FieldLabel htmlFor={`tickets.${index}.price`}>Τιμή</FieldLabel>
+                      <InputGroup>
+                        <InputGroupInput
+                          id={`tickets.${index}.price`}
+                          type="text"
+                          inputMode="numeric"
+                          disabled={isFree}
+                          {...register(`tickets.${index}.price`)}
+                          onBlur={(e) => handlePriceBlur(index, e)}
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupText>€</InputGroupText>
+                        </InputGroupAddon>
+                      </InputGroup>
+                    </Field>
+                  </div>
+                </div>
+              )
+            })}
+
+            {ticketSelectionError && (
+              <p className="text-sm text-destructive">{ticketSelectionError}</p>
+            )}
+
+            <Button type="button" variant="outline" onClick={() => append(makeTicketGroup())}>
+              <PlusIcon aria-hidden="true" className="mr-1.5 size-4" />
+              Πρόσθεσε άλλη κατηγορία εισιτηρίου
+            </Button>
+          </>
+        )}
+
+        {step === 3 && confirmingTickets && (
+          <div className="flex flex-col gap-3 text-sm">
+            <h2 className="font-heading text-base font-medium text-foreground">
+              Επιβεβαίωση εισιτηρίων
+            </h2>
+            <p className="text-muted-foreground">
+              Αυτές είναι οι κατηγορίες εισιτηρίων που θα δημιουργηθούν — σίγουρος;
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {ticketValues.map((t, i) => (
+                <li
+                  key={i}
+                  className="flex items-center justify-between rounded-md border border-gray-200 p-2.5"
+                >
+                  <span className="font-medium text-foreground">{t.label}</span>
+                  <span className="text-muted-foreground">
+                    {Number(t.price || 0)}€ × {t.quantity || 0}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="flex flex-col gap-2 text-sm">
+            <p className="font-medium text-foreground">{watch("title")}</p>
+            {watch("description") && (
+              <p className="text-muted-foreground">{watch("description")}</p>
+            )}
+            {watch("date") && watch("time") && (
+              <p className="text-muted-foreground">
+                {new Date(`${watch("date")}T${watch("time")}`).toLocaleString("el-GR", {
+                  dateStyle: "full",
+                  timeStyle: "short",
+                })}
+              </p>
+            )}
+            {watch("location") && (
+              <p className="text-muted-foreground">{watch("location")}</p>
+            )}
+            <p className="text-muted-foreground">
+              Χωρητικότητα (αυτόματο): {capacity} εισιτήρια
+            </p>
+            <ul className="list-inside list-disc text-muted-foreground">
+              {ticketValues.map((t, i) => (
+                <li key={i}>
+                  {t.label || "—"}: {Number(t.price || 0)}€ × {t.quantity || 0}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        </div>
+
+        {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+
+        {/* Πίσω / Ακύρωση / Επόμενο — ΕΞΩ από το card παραπάνω (13/9, ρητό
+            αίτημα χρήστη). Πίσω = ένα βήμα πίσω (goBack, context-sensitive —
+            στο βήμα 1 βγάζει έξω, ίδια συμπεριφορά με πριν). Ακύρωση = πάντα
+            ορατό, στο κέντρο, βγάζει έξω απευθείας ασχέτως βήματος — ξεχωριστό
+            από το Πίσω, δεν υπήρχε πριν σαν μόνιμο, ξεχωριστό κουμπί. */}
+        <div className="flex items-center justify-between pt-2">
+          <Button type="button" variant="outline" onClick={goBack} disabled={isSaving}>
+            Πίσω
+          </Button>
+          <Button type="button" variant="outline" onClick={handleCancel} disabled={isSaving}>
+            Ακύρωση
+          </Button>
+          {step < 4 ? (
+            <Button type="button" onClick={goNext}>
+              {confirmingTickets ? "Ολοκλήρωση" : "Επόμενο"}
+            </Button>
+          ) : (
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? "Αποθήκευση..." : isEditMode ? "Αποθήκευση" : "Δημιουργία event"}
+            </Button>
+          )}
+        </div>
+      </form>
+    </div>
+  )
+}
