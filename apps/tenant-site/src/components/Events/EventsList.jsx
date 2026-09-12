@@ -4,8 +4,45 @@ import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid'
 import { Link } from 'react-router-dom'
 import { getMapsUrl } from '../../lib/maps'
 import { useEventFavorites, useToggleEventFavorite } from '../../queries/useEventFavorites'
+import AddEventWizard from './AddEventWizard'
+import DeleteEventDialog from './DeleteEventDialog'
+
+// FREE / SOLD OUT (13/9, ρητό αίτημα χρήστη) — υπολογίζονται από τις
+// ΠΡΑΓΜΑΤΙΚΕΣ γραμμές tickets του event (event.tickets, βλ. useEvents.js
+// embed), όχι από το χοντρικό events.capacity/tickets_sold:
+//   - SOLD OUT: υπάρχει τουλάχιστον μία ενεργή κατηγορία εισιτηρίου ΚΑΙ
+//     όλες είναι εξαντλημένες (quantity - quantity_sold <= 0).
+//   - FREE: υπάρχει τουλάχιστον μία ενεργή κατηγορία ΚΑΙ όλες έχουν
+//     τιμή 0 (δηλαδή το event είναι αμιγώς δωρεάν).
+// SOLD OUT υπερισχύει του FREE (ένα εξαντλημένο δωρεάν event δείχνει
+// SOLD OUT, όχι FREE). Παλιά events χωρίς γραμμές tickets πέφτουν στο
+// παλιό, χοντρικό getStatus() παρακάτω.
+function getTicketAvailability(event) {
+  const activeTickets = (event.tickets || []).filter((t) => t.is_active !== false)
+  if (activeTickets.length === 0) return null
+
+  const soldOut = activeTickets.every(
+    (t) => Number(t.quantity) - Number(t.quantity_sold || 0) <= 0,
+  )
+  if (soldOut) return 'sold_out'
+
+  const freeOnly = activeTickets.every((t) => Number(t.price) === 0)
+  if (freeOnly) return 'free'
+
+  return null
+}
 
 function getStatus(event) {
+  const availability = getTicketAvailability(event)
+  if (availability === 'sold_out') {
+    return { label: 'SOLD OUT', color: 'bg-red-50 text-red-700 inset-ring-red-600/20' }
+  }
+  if (availability === 'free') {
+    return { label: 'FREE', color: 'bg-green-50 text-green-700 inset-ring-green-600/20' }
+  }
+
+  // Fallback: παλιό, χοντρικό μοντέλο (events.capacity/tickets_sold) —
+  // events χωρίς γραμμές tickets (πολύ παλιά, πριν το wizard).
   if (!event.capacity || event.capacity === 0) {
     return { label: 'Διαθέσιμα', color: 'bg-green-50 text-green-700 inset-ring-green-600/20' }
   }
@@ -35,7 +72,20 @@ function formatDateBadge(dateString) {
 // Ίδιο μοτίβο favorite-toggle με το ProductList.jsx (Merch) — καρδούλα πάνω
 // στην εικόνα, solid/outline ανάλογα με την κατάσταση, onRequireAuth αν δεν
 // είσαι συνδεδεμένος. Βλ. useEventFavorites.js/event_favorites migration.
-export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth }) {
+//
+// SOLD OUT / FREE (13/9): σε αυτές τις δύο περιπτώσεις το κουμπί "Ticket"
+// ΔΕΝ είναι πια πλοηγήσιμο link — γίνεται ανενεργό <span> με το ίδιο
+// εικονίδιο εισιτηρίου + μια έγχρωμη ετικέτα (κόκκινη/πράσινη, ίδιο στυλ
+// με το status pill πάνω) αντί για το κείμενο "Ticket". Ρητό αίτημα
+// χρήστη — δεν έχει νόημα να ανοίγει τον διάλογο αγοράς όταν δεν υπάρχει
+// τίποτα προς αγορά.
+//
+// Admin controls (13/9, ρητό αίτημα χρήστη): ΜΟΝΟ για πραγματικούς tenant
+// admins — μολύβι επεξεργασίας (ξαναχρησιμοποιεί το AddEventWizard σε edit
+// mode, βλ. AddEventWizard.jsx) + κόκκινος κάδος διαγραφής (DeleteEventDialog).
+// Κάθονται πάνω-αριστερά στην εικόνα (η καρδούλα favorite είναι πάνω-δεξιά),
+// ή σε ξεχωριστή γραμμή πάνω από τον τίτλο όταν το event δεν έχει εικόνα.
+export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, isAdmin, tenantId }) {
   const { data: favoriteEventIds = [] } = useEventFavorites(fanId)
   const toggleEventFavorite = useToggleEventFavorite(fanId)
 
@@ -55,6 +105,7 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth })
       {events.map((event) => {
         const status = getStatus(event)
         const isFavorited = favoriteEventIds.includes(event.id)
+        const availability = getTicketAvailability(event)
 
         return (
           <li
@@ -68,6 +119,12 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth })
                   alt={event.title}
                   className="h-40 w-full object-cover"
                 />
+                {isAdmin && (
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                    <AddEventWizard tenantId={tenantId} event={event} />
+                    <DeleteEventDialog event={event} tenantId={tenantId} />
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={(e) => handleToggleFavorite(e, event)}
@@ -105,19 +162,43 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth })
                     {event.description}
                   </p>
                 )}
+                {isAdmin && !event.image_url && (
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <AddEventWizard tenantId={tenantId} event={event} />
+                    <DeleteEventDialog event={event} tenantId={tenantId} />
+                  </div>
+                )}
               </div>
             </div>
 
             <div>
               <div className="-mt-px flex divide-x divide-gray-200">
                 <div className="flex min-w-0 flex-1">
-                  <Link
-                    to={`event/${event.slug}`}
-                    className="relative -mr-px inline-flex w-full items-center justify-center gap-x-3 rounded-bl-lg border border-transparent py-4 text-sm font-semibold text-gray-900"
-                  >
-                    <TicketIcon aria-hidden="true" className="size-5 text-gray-400" />
-                    Ticket
-                  </Link>
+                  {availability === 'sold_out' || availability === 'free' ? (
+                    <span
+                      className="relative -mr-px inline-flex w-full cursor-not-allowed items-center justify-center gap-x-2 rounded-bl-lg border border-transparent py-4 text-sm font-semibold text-gray-400"
+                      aria-disabled="true"
+                    >
+                      <TicketIcon aria-hidden="true" className="size-5 text-gray-300" />
+                      <span
+                        className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium inset-ring ${
+                          availability === 'sold_out'
+                            ? 'bg-red-50 text-red-700 inset-ring-red-600/20'
+                            : 'bg-green-50 text-green-700 inset-ring-green-600/20'
+                        }`}
+                      >
+                        {availability === 'sold_out' ? 'SOLD OUT' : 'FREE'}
+                      </span>
+                    </span>
+                  ) : (
+                    <Link
+                      to={`event/${event.slug}`}
+                      className="relative -mr-px inline-flex w-full items-center justify-center gap-x-3 rounded-bl-lg border border-transparent py-4 text-sm font-semibold text-gray-900"
+                    >
+                      <TicketIcon aria-hidden="true" className="size-5 text-gray-400" />
+                      Ticket
+                    </Link>
+                  )}
                 </div>
                 <div className="-ml-px flex min-w-0 flex-1">
                   <a
