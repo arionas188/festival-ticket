@@ -64,8 +64,10 @@ export default function Header({ tenant, settings, onRequireAuth }) {
     }
   }
 
-  function handleAddToCart(product, quantity) {
-    addItem(product, quantity)
+  // 15/9: variantId προαιρετικό, περνάει μέχρι το useCart.addItem — stock
+  // ανά μέγεθος (product_variants, βλ. ProductOverviewRoute.jsx).
+  function handleAddToCart(product, quantity, variantId) {
+    addItem(product, quantity, variantId)
     if (favoriteIds.includes(product.id)) {
       toggleFavorite.mutate({ productId: product.id, isFavorited: true })
     }
@@ -105,7 +107,21 @@ export default function Header({ tenant, settings, onRequireAuth }) {
       </div>
 
       <div className="mx-auto max-w-md px-4 sm:max-w-2xl">
-        <div className="-mt-12 flex items-end gap-4 sm:-mt-14">
+        {/* 15/9, bug fix (ρητή αναφορά χρήστη: "μπαίνει πιο πάνω, κάτω
+            από το cover image") -- "relative" ΕΔΩ είναι το fix, όχι
+            decoration. Το cover image parent div από πάνω είναι επίσης
+            "relative" (για να κουμπώσει πάνω του το pencil-icon overlay
+            του EditCoverImageDialog) -- στην css το "position:relative"
+            (ακόμα και ΧΩΡΙΣ z-index) βάζει αυτόματα το στοιχείο σε
+            ανώτερο "layer" ζωγραφικής από ό,τι static/non-positioned
+            αδέρφια, ΑΝΕΞΑΡΤΗΤΑ από τη σειρά στο DOM. Το avatar (η δική
+            του "relative shrink-0" εδώ μέσα) γλίτωνε ήδη επειδή είναι κι
+            αυτό positioned. Το follow button/icons ΔΕΝ ήταν -- έμενε στο
+            "static" layer, από ΚΑΤΩ από το cover image, ό,τι DOM order
+            κι αν είχε. Ζωντανό tested (Chrome, tab του χρήστη): με
+            "relative" εδώ, το elementFromPoint() πάνω στο κουμπί γυρνάει
+            πλέον το ίδιο το κουμπί, όχι το <img>. */}
+        <div className="relative -mt-12 flex items-end gap-4 sm:-mt-14">
           <div className="relative shrink-0">
             <img
               alt=""

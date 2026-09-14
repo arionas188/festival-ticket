@@ -8,6 +8,8 @@ import TenantLayout from './components/Header/TenantLayout.jsx'
 import MerchCategoriesRoute from './components/Merch/MerchCategoriesRoute.jsx'
 import MerchCategoryRoute from './components/Merch/MerchCategoryRoute.jsx'
 import ProductModalRoute from './components/Merch/ProductModalRoute.jsx'
+import OrderSummaryRoute from './components/Merch/OrderSummaryRoute.jsx'
+import ProductOverviewRoute from './components/Merch/ProductOverviewRoute.jsx'
 import EventsRoute from './components/Events/EventsRoute.jsx'
 import EventFormRoute from './components/Events/EventFormRoute.jsx'
 import EventModalRoute from './components/Events/EventModalRoute.jsx'
@@ -57,6 +59,18 @@ const router = createBrowserRouter([
             element: <MerchCategoryRoute />,
             children: [{ path: 'product/:productId', element: <ProductModalRoute /> }],
           },
+          // merch/order/:orderId (14/9, ρητό αίτημα χρήστη — checkout flow):
+          // ΕΠΙΠΕΔΟ (flat) sibling, ΟΧΙ nested μέσα στο merch/merch-category —
+          // ίδιο μοτίβο με το events/event/new παρακάτω, αντικαθιστά εντελώς
+          // τη λίστα αντί να κάθεται πάνω της (πραγματική "σελίδα
+          // παραγγελίας", όχι modal).
+          { path: 'merch/order/:orderId', element: <OrderSummaryRoute /> },
+          // merch/overview/:productId (14/9, ρητό αίτημα χρήστη — "product
+          // overview για να μπορεί να το κάνει share το link"): ΕΠΙΠΕΔΟ (flat)
+          // sibling, ίδιο μοτίβο με merch/order/:orderId — πραγματική σελίδα
+          // προϊόντος, ξεχωριστή από το merch/product/:productId modal
+          // ("Γρήγορη αγορά", ΠΑΡΑΜΕΝΕΙ όπως είναι, δεν αγγίχτηκε).
+          { path: 'merch/overview/:productId', element: <ProductOverviewRoute /> },
           // /events → λίστα events. Το event είναι child route, οπότε το TicketDialog
           // modal κάθεται πάνω στη λίστα χωρίς κόλπα με location state.
           {

@@ -1,9 +1,8 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-
-const PLACEHOLDER_COLORS = [{ id: "black", name: "Μαύρο", classes: "bg-gray-900" }]
-const PLACEHOLDER_SIZES = ["S", "M", "L", "XL"]
+import { useCart } from "../../queries/useCart"
+import SizeSelector from "./SizeSelector"
 
 export default function ProductQuickShop({
   product,
@@ -11,13 +10,42 @@ export default function ProductQuickShop({
   onAddToCart,
   isLoggedIn,
   onRequireAuth,
+  fanId,
+  tenantId,
 }) {
   const [quantity, setQuantity] = useState(1)
-  const [selectedSize, setSelectedSize] = useState(null)
+  const [selectedVariantId, setSelectedVariantId] = useState(null)
+  // 15/9, ίδιο bug fix με ProductOverviewRoute.jsx: το + δεν είχε όριο, ο fan
+  // μπορούσε να ζητήσει περισσότερα από όσα υπάρχουν. Δες εκεί για πλήρες
+  // σχόλιο — ίδια λογική εδώ, ίδιο σημείο αλήθειας (stock_quantity μείον ό,τι
+  // ήδη έχει στο καλάθι για αυτό το προϊόν).
+  const { items: cartItems } = useCart(fanId, tenantId)
 
   // Η επαναφορά ποσότητας/μεγέθους γίνεται πλέον με remount: ο caller δίνει
   // key={product.id}, οπότε το state ξεκινά καθαρό σε κάθε προϊόν.
   if (!product) return null
+
+  // 15/9: stock ανά μέγεθος (product_variants) — δες ProductOverviewRoute.jsx
+  // για πλήρες σχόλιο, ίδια ακριβώς λογική εδώ.
+  const hasVariants = Boolean(product.product_variants?.length)
+  const requiresSizeSelection = product.category === "clothing" && hasVariants
+  const selectedVariant =
+    product.product_variants?.find((v) => v.id === selectedVariantId) ?? null
+  const cartVariantId = requiresSizeSelection ? selectedVariantId : null
+  const needsSizePick = requiresSizeSelection && !selectedVariantId
+
+  const stockForCap = selectedVariant ? selectedVariant.stock_quantity : product.stock_quantity
+  const existingCartQty =
+    cartItems.find(
+      (i) => i.product.id === product.id && (i.variant?.id ?? null) === cartVariantId
+    )?.quantity ?? 0
+  const maxAddable = needsSizePick
+    ? 0
+    : stockForCap != null
+      ? Math.max(0, stockForCap - existingCartQty)
+      : Infinity
+  const canAddToCart = !needsSizePick && maxAddable > 0
+  const effectiveQuantity = Math.min(quantity, Math.max(1, maxAddable))
 
   return (
     <Dialog open={!!product} onOpenChange={(open) => !open && onClose()}>
@@ -41,36 +69,14 @@ export default function ProductQuickShop({
 
             <div className="mt-6">
               {product.category === "clothing" && (
-                <>
-                  <fieldset aria-label="Επιλογή χρώματος" disabled>
-                    <legend className="text-sm font-medium text-gray-900">Χρώμα</legend>
-                    <div className="mt-2 flex items-center gap-x-3 opacity-40">
-                      {PLACEHOLDER_COLORS.map((color) => (
-                        <div key={color.id} className={`size-8 rounded-full ${color.classes}`} />
-                      ))}
-                    </div>
-                  </fieldset>
-
-                  <fieldset aria-label="Επιλογή μεγέθους" className="mt-6">
-                    <div className="text-sm font-medium text-gray-900">Μέγεθος</div>
-                    <div className="mt-2 grid grid-cols-4 gap-2">
-                      {PLACEHOLDER_SIZES.map((size) => (
-                        <button
-                          key={size}
-                          type="button"
-                          onClick={() => setSelectedSize(size)}
-                          className={`flex items-center justify-center rounded-md border p-2 text-sm font-medium ${
-                            selectedSize === size
-                              ? "border-gray-900 bg-gray-900 text-white"
-                              : "border-gray-300 text-gray-900 hover:bg-gray-50"
-                          }`}
-                        >
-                          {size}
-                        </button>
-                      ))}
-                    </div>
-                  </fieldset>
-                </>
+                <fieldset aria-label="Επιλογή μεγέθους">
+                  <div className="text-sm font-medium text-gray-900">Μέγεθος</div>
+                  <SizeSelector
+                    variants={product.product_variants}
+                    selectedVariantId={selectedVariantId}
+                    onSelect={setSelectedVariantId}
+                  />
+                </fieldset>
               )}
 
               <div className="mt-6">
@@ -79,19 +85,33 @@ export default function ProductQuickShop({
                   <button
                     type="button"
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    disabled={!canAddToCart}
+                    className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     −
                   </button>
-                  <span className="w-6 text-center text-sm font-medium">{quantity}</span>
+                  <span className="w-6 text-center text-sm font-medium">{effectiveQuantity}</span>
                   <button
                     type="button"
-                    onClick={() => setQuantity((q) => q + 1)}
-                    className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    onClick={() => setQuantity((q) => Math.min(q + 1, maxAddable))}
+                    disabled={effectiveQuantity >= maxAddable}
+                    className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     +
                   </button>
                 </div>
+                {needsSizePick && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Επίλεξε μέγεθος για να δεις τη διαθεσιμότητα.
+                  </p>
+                )}
+                {!needsSizePick && !canAddToCart && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {stockForCap > 0
+                      ? "Έχεις ήδη όλη τη διαθέσιμη ποσότητα στο καλάθι σου."
+                      : "Εξαντλημένο."}
+                  </p>
+                )}
               </div>
 
               <div className="mt-6 flex flex-col gap-2">
@@ -106,9 +126,11 @@ export default function ProductQuickShop({
                       onRequireAuth()
                       return
                     }
-                    onAddToCart(product, quantity)
+                    if (!canAddToCart) return
+                    onAddToCart(product, effectiveQuantity, cartVariantId)
                     onClose()
                   }}
+                  disabled={!canAddToCart}
                 >
                   Προσθήκη στο καλάθι
                 </Button>

@@ -1091,8 +1091,301 @@ console errors.
 
 ---
 
+## 🧩 shadcn/Radix UI kit + Tiptap rich-text editor (12–13/9)
+
+Ρητό αίτημα χρήστη: 5 νέα shadcn/Radix components (`sonner`, `combobox`, `progress`, `skeleton`, `toggle-group`) + Tiptap (`@tiptap/react`, `@tiptap/pm`, `@tiptap/starter-kit`) για rich-text bio editing.
+
+**Δύο side-effects του shadcn CLI εντοπίστηκαν και διορθώθηκαν:**
+- Τα νεότερα CLI templates εισάγουν το `cn` από ξεχωριστό npm package αντί για το δικό μας `@/lib/utils` — επαναφέρθηκε σε button/input/textarea/input-group/skeleton (2 φορές, το CLI το ξανάφερε σε δεύτερο `shadcn add`).
+- **Σοβαρότερο:** το Radix δεν έχει native Combobox primitive — ακόμα κι όταν το `components.json` έχει `"style": "radix-nova"`, το CLI's `combobox` block χρησιμοποιεί πάντα `@base-ui/react`. Αντί να το δεχτούμε, χτίστηκε **custom Combobox** πάνω σε Popover(Radix)+Command(cmdk) — `components/ui/combobox.jsx` — ώστε να μείνουμε 100% Radix, όπως ζήτησε ρητά ο χρήστης.
+- **⚠️ Near-miss data loss:** ένα δεύτερο `npx shadcn add popover command` ξαναέγραψε το `dialog.jsx` από το pristine template, σβήνοντας το ήδη-χτισμένο, uncommitted `useVisualViewportMaxHeight()` hook (mobile keyboard fix). Ανακατασκευάστηκε από τη μνήμη της συνομιλίας. **Μάθημα για το μέλλον:** πρόσεχε πριν από κάθε `shadcn add` κοντά σε ήδη custom-ποιημένα ui/ αρχεία — μπορεί να τα ξαναγράψει σιωπηλά.
+
+**Skeleton loading states** — αντικαταστάθηκαν ~16 "Φόρτωση..."/κενές καταστάσεις σε όλο το project με πραγματικά `Skeleton` placeholders. 3 νέα reusable helper components: `card-grid-skeleton.jsx`, `loading-dialog.jsx`, `FanListSkeleton.jsx`.
+
+**RichTextEditor** (`components/ui/rich-text-editor.jsx`) — Tiptap v3 (`useEditor`+`useEditorState`, σημείωση: το v3 δεν κάνει πια auto-rerender σε κάθε transaction by default) + `ToggleGroup` toolbar (Bold/Italic/Strike/λίστες). Wired στο bio editor του tenant-site (`EditBioDialog.jsx`) — legacy plain-text bio μετατρέπεται αυτόματα σε HTML την πρώτη φορά, όριο χαρακτήρων μετράει το stripped plain-text (όχι το HTML markup). ⚠️ **Ανοιχτό:** το `apps/admin-dashboard` έχει ΔΙΚΟ ΤΟΥ, ξεχωριστό bio editor που ΔΕΝ αναβαθμίστηκε στο ίδιο rich-text — flagged στον χρήστη, καμία απάντηση ακόμα.
+
 ---
+
+## 🎟️ Event wizard: modal → πραγματική σελίδα + custom αναζήτηση Google Places (12–13/9)
+
+Το παλιό `AddEventWizard.jsx` (modal) **διαγράφηκε** και αντικαταστάθηκε από `EventFormPage.jsx`/`EventFormRoute.jsx` — πραγματική σελίδα με δικό της URL (`events/event/new`, `events/event/:eventId/edit`), ίδιο μοτίβο με το υπόλοιπο routing.
+
+Νέα λειτουργικότητα, όλα ρητά αιτήματα χρήστη:
+- **Cover-image fallback** — αν ο admin δεν ανεβάσει εικόνα event, μπαίνει αυτόματα το cover image του tenant (`Header.jsx` περνάει `coverImageUrl` μέσω Outlet context, καμία επιπλέον DB call).
+- **`LocationMapPreview.jsx`** (νέο) — στατική προεπισκόπηση χάρτη (Google Static Maps API) κάτω από το πεδίο τοποθεσίας, μόλις επιλεγεί μέρος. Ο χρήστης διάλεξε ρητά τη στατική εικόνα αντί για interactive χάρτη (φθηνότερο SKU — Static Maps ≠ Maps JS/Places, χρεώνονται ξεχωριστά παρόλο που μοιράζονται το ίδιο key).
+- **`LocationPickerDialog.jsx` ξαναγράφτηκε εξ' ολοκλήρου.** Η αρχική υλοποίηση χρησιμοποιούσε το επίσημο `PlaceAutocompleteElement` widget της Google — αλλά αυτό έχει ΔΙΚΟ ΤΟΥ, μη-στυλιζόμενο dropdown που σε mobile ανοίγει σαν ξεχωριστή full-screen σκούρα οθόνη αντί να δείχνει αποτελέσματα μέσα στο δικό μας dialog (ρητή αναφορά χρήστη με screenshots). Λύση: καλούμε απευθείας το προγραμματικό `AutocompleteSuggestion.fetchAutocompleteSuggestions()` (επίσημο, μη deprecated API) και ζωγραφίζουμε τη ΔΙΚΗ ΜΑΣ λίστα αποτελεσμάτων, ίδιο look-and-feel με το υπόλοιπο app, με session token + debounce.
+- Κάθε βήμα του wizard τυλίγεται τώρα σε bordered/shadow "κάρτα", πιο εμφανής progress bar με ποσοστό, toast επιβεβαιώσεις (sonner) σε δημιουργία/ενημέρωση/διαγραφή, το ticket-type πεδίο έγινε Combobox αντί για native `<select>`.
+- Ο standalone τίτλος πάνω από κάθε βήμα αφαιρέθηκε εντελώς (έμεινε μόνο η progress bar)· στο βήμα επιβεβαίωσης εισιτηρίων, το "Επιβεβαίωση εισιτηρίων" μπήκε ΜΕΣΑ στο bordered div των κατηγοριών, όχι σαν ξεχωριστή επικεφαλίδα.
+- ⚠️ **Ανοιχτό/μικρή ασυνέπεια:** το τελευταίο κουμπί στο βήμα επιβεβαίωσης λέει "Ολοκλήρωση" αλλά ΔΕΝ αποθηκεύει το event — απλά προχωράει στο τελικό βήμα υποβολής. Flagged στον χρήστη ως πιθανά παραπλανητικό όνομα, καμία απόφαση ακόμα.
+
+**Google Maps API — production bug βρέθηκε & διορθώθηκε (χρήστης το επιβεβαίωσε, "όλα καλά λειτουργούν"):** η αναζήτηση τοποθεσίας δούλευε τοπικά αλλά έσκαγε στο Netlify — αιτία: το API key έχει HTTP referrer restriction (μόνο concerto.gr subdomains + localhost), δεν είχε το netlify.app domain. Ο χρήστης το πρόσθεσε στο Google Cloud Console. **Σημείωση για το μέλλον:** αν προστεθεί custom domain ή αλλάξει το Netlify URL, το ίδιο restriction θα χρειαστεί ενημέρωση.
+
+---
+
+## 📱 Mobile responsiveness bug: header tabs ξεχείλιζαν σε στενές οθόνες (14/9)
+
+Αναφορά χρήστη (μέσω φίλου με Android ~360px πλάτος): "όλο το site φαίνεται πιο μικρό και έχει κενό". **Root cause εντοπίστηκε με πραγματικό test σε 360px:** τα 3 pill buttons (Πληροφορίες/Εκδηλώσεις/Merch Store) στο `Header.jsx` ήταν flex με σταθερό πλάτος (`shrink-0` default του Button + `whitespace-nowrap` + `px-4`) — μαζί ξεπερνούσαν το διαθέσιμο πλάτος, το "Merch Store" έκοβε έξω από την οθόνη. Επειδή αυτό συμβαίνει στο ΚΟΙΝΟ header (άρα σε κάθε tab/σελίδα), το mobile browser κάνει αυτόματο zoom-out σε ΟΛΗ τη σελίδα για να χωρέσει το πλατύτερο περιεχόμενο — απ' αυτό η εντύπωση "όλο το project φαίνεται μικρότερο".
+
+**Διόρθωση:** τα tabs έγιναν `grid grid-cols-3` (ισομερή, μαθηματικά αδύνατο να ξεχειλίσουν, όσο μεγάλο κι αν είναι το κείμενο). Προληπτικά προστέθηκε `flex-wrap` και στη διπλανή γραμμή (follow button + εικονίδια search/αγαπημένα/καλάθι όταν ο fan είναι συνδεδεμένος) — ίδιο ρίσκο overflow, δεν είχε επιβεβαιωθεί ζωντανά αλλά ο υπολογισμός έδειχνε οριακό fit.
+
+**Ίδια μέρα, στυλιστικά αιτήματα:** border-bottom κάτω από τα tabs (διαχωρισμός tabs/περιεχομένου), λίστα events + event wizard τυλίχτηκαν σε απαλό γκρι στρογγυλεμένο panel (ίδιο ύφος με το Merch Store) ώστε η ήδη υπάρχουσα `shadow-sm/md` στις κάρτες να φαίνεται πραγματικά (πριν ήταν αόρατη, λευκό πάνω σε λευκό).
+
+**⚠️ Δεν επιβεβαιώθηκε ακόμα visual σε πραγματικό local dev από το Claude session** (χρειάζεται tenant subdomain π.χ. `villagers.concerto.gr:5173` από το `/etc/hosts` του υπολογιστή — δεν ήταν προσβάσιμο από το built-in browser αυτής της συνεδρίας, μόνο από το stale deployed Netlify build). Καλό θα ήταν ένα ρητό ζωντανό "ναι, φαίνεται σωστά τώρα" από τον χρήστη ή τον φίλο του.
+
+---
+
+## 🧹 Καθαρισμός + commit (12–14/9)
+
+- Αφαιρέθηκαν leftover placeholder κουμπιά "Message"/"Call" από το `Header.jsx` (μοναδική εμφάνιση, χωρίς λειτουργικότητα).
+- **Commit `29a14f2`** — "Rebuild event wizard as a page, add rich-text bio editor and shadcn UI kit, fix mobile tab overflow" — 48 αρχεία, όλη η παραπάνω δουλειά. **Έγινε ΜΟΝΟ commit, ΟΧΙ push** — ο χρήστης θα το κάνει push ο ίδιος. ⚠️ Χρειάζεται επιβεβαίωση ότι όντως έγινε push πριν συνεχίσουμε πάνω σε αυτό.
+- Εκκρεμεί ακόμα (δόθηκε στον χρήστη, δεν έχει επιβεβαιωθεί): `npm uninstall @base-ui/react cn` — δύο πλέον αχρησιμοποίητα deps μετά τον custom Combobox.
+- Βρέθηκε ένας untracked φάκελος `Claude outputs/tenant_images_storage.sql` στη ρίζα του repo (παλιό scratch αρχείο, άσχετο με τη σημερινή δουλειά) — **σκόπιμα ΔΕΝ μπήκε στο commit.** Να αποφασίσει ο χρήστης αν θα το κρατήσει ή θα το σβήσει.
+
+**Για αύριο, με προτεραιότητα:**
+1. Επιβεβαίωση ότι το commit `29a14f2` έγινε push, και ότι το Netlify deploy το πήρε σωστά.
+2. Ζωντανό visual check του mobile fix (360px) — από τον χρήστη ή τον φίλο του.
+3. Απόφαση: rename "Ολοκλήρωση" button, upgrade admin-dashboard bio editor σε Tiptap (και τα δύο flagged, καμία απάντηση ακόμα).
+4. `npm uninstall @base-ui/react cn` αν δεν έχει γίνει ήδη.
+5. Τι να γίνει με το `Claude outputs/tenant_images_storage.sql`.
+
+---
+
+## 🛒 Merch checkout: reserve stock → pending order, μέχρι το σημείο του Stripe call (14/9)
+
+Ρητό αίτημα χρήστη: "ασχοληθούμε με το merch και να φτάσουμε μέχρι το βήμα που χρειάζεται να κάνω call το API της Stripe". Υλοποιήθηκε ό,τι είχε ήδη σχεδιαστεί (αλλά ποτέ χτιστεί) στην ενότητα "Race Conditions & Overselling" παραπάνω — atomic stock reservation + hold με λήξη χρόνου, ΧΩΡΙΣ το ίδιο το Stripe integration (σκόπιμα, δεν υπάρχει ακόμα κανένα serverless function scaffold στο repo — confirmed, καμία τεκμηρίωση για αυτό ξεκίνησε σήμερα).
+
+**Νέο migration:** `supabase/migrations/20260914150000_add_orders_checkout.sql` (**εκκρεμεί να το τρέξει ο χρήστης στο Supabase SQL editor**, ίδιο workflow με κάθε προηγούμενο migration):
+- **`orders`** (tenant_id, fan_id, status `pending/completed/expired/cancelled`, subtotal, expires_at, stripe_payment_intent_id) + **`order_items`** (order_id, product_id, quantity, unit_price — snapshot τιμής τη στιγμή της παραγγελίας, ίδιο μοτίβο με το `favorites.price_at_favorite`). RLS: μόνο SELECT για τον ιδιοκτήτη fan σε ΚΑΙ τα δύο tables (ίδιο pattern με `event_favorites`) — καμία insert/update policy, όλες οι εγγραφές περνάνε αποκλειστικά από τα RPCs παρακάτω.
+- **`create_order_from_cart(p_fan_id, p_tenant_id)`** — SECURITY DEFINER RPC (ίδιο στυλ με το `delete_own_account()`), μετατρέπει το τρέχον `cart_items` ενός fan σε μία pending παραγγελία με 10λεπτο hold: atomic `UPDATE products SET stock_quantity = stock_quantity - qty WHERE stock_quantity >= qty` ανά γραμμή (η ίδια η WHERE συνθήκη εγγυάται μηδενικό overselling, καμία εφαρμογή-επίπεδο κλειδώματος) — αν έστω μία γραμμή αποτύχει (εξαντλημένο προϊόν), όλη η function call αναιρείται αυτόματα (Postgres atomicity), το order ΔΕΝ δημιουργείται, το καλάθι μένει άθικτο. Ρητός έλεγχος `auth.uid() = p_fan_id` μέσα στη function (defense in depth, αφού το SECURITY DEFINER παρακάμπτει RLS).
+- **`expire_stale_orders()`** — SECURITY DEFINER, τρέχει σε **pg_cron schedule κάθε λεπτό** (`cron.schedule('expire-stale-orders', '* * * * *', ...)`) — **το δεύτερο pg_cron job σε αυτό το project** — υπήρχε ήδη ένα προϋπάρχον jobid=1 (`delete-expired-events`, ανά ώρα, διαγράφει παλιά tickets/events >24ωρών) που δεν είχε ποτέ τεκμηριωθεί σε κανένα brief (δημιουργήθηκε απευθείας στο Supabase dashboard, όπως και τα `cart_items`/`adjust_cart_quantity` — ίδιο pattern μη τεκμηριωμένων migrations). ⚠️ **Ο χρήστης πρέπει να ενεργοποιήσει το extension `pg_cron`** (Supabase dashboard → Database → Extensions) **ΠΡΙΝ** τρέξει το migration, αλλιώς σκάει το `cron.schedule()` στο τέλος του αρχείου. Επαναφέρει το δεσμευμένο stock + βάζει `status = 'expired'` σε κάθε pending order που πέρασε το `expires_at` του.
+
+**Frontend (`apps/tenant-site/src/`):**
+- `queries/useCreateOrder.js` (NEW) — mutation, καλεί το RPC, invalidate το cart query σε επιτυχία.
+- `queries/useOrder.js` (NEW) — φέρνει μία παραγγελία + order_items(product), `refetchInterval` 15s όσο είναι `pending` (να "πιάνει" έγκαιρα τη λήξη που κάνει το pg_cron server-side).
+- `components/Merch/CartDialog.jsx` — το "Ολοκλήρωση παραγγελίας" έγινε πραγματικό κουμπί (ήταν πάντα disabled placeholder). Σε επιτυχία κλείνει το dialog + πάει στη νέα σελίδα παραγγελίας· σε αποτυχία (πιο συχνό σενάριο: κάποιος άλλος αγόρασε το τελευταίο ίδιο τη στιγμή) δείχνει φιλικό μήνυμα inline, το καλάθι μένει όπως ήταν.
+- `components/Merch/OrderSummaryRoute.jsx` (NEW), route `merch/order/:orderId` (`main.jsx`) — flat sibling του `merch`/`merch/category/:categoryKey`, ίδιο μοτίβο "πραγματική σελίδα, όχι modal" με το event wizard. Δείχνει γραμμές παραγγελίας + σύνολο, ζωντανό countdown (mm:ss) μέχρι το `expires_at`, και ένα κουμπί **"Πληρωμή" — υπαρκτό, στυλιζόμενο, clickable, αλλά ο handler είναι ρητό stub** με σχόλιο TODO που εξηγεί ακριβώς τι λείπει (serverless function με το Stripe secret key, PaymentIntent, webhook για να γίνει το order `completed`). Αν η παραγγελία λήξει ενώ ο fan είναι στη σελίδα (ή επιστρέψει αργότερα), δείχνει μήνυμα λήξης + κουμπί "Πρόσθεσε ξανά στο καλάθι" (re-άδειασμα των ίδιων προϊόντων μέσω του ήδη υπάρχοντος `addItem`).
+
+**✅ Migration τρέξε επιτυχώς, pg_cron job ενεργό** — επιβεβαιώθηκε με `select * from cron.job;`: jobid=2 (`expire-stale-orders`, `* * * * *`, `select public.expire_stale_orders();`) είναι active. **⚠️ Ακόμα δεν επιβεβαιώθηκε ζωντανά το ίδιο το checkout flow στο browser** (προσθήκη στο καλάθι → checkout → επιβεβαίωση ότι μειώθηκε το stock_quantity και άδειασε το cart_items → δοκιμή "εξαντλημένο προϊόν" σενάριο → προαιρετικά, δοκιμή λήξης hold περιμένοντας το pg_cron).
+
+**Ρητά εκτός scope σήμερα (επόμενο βήμα, όποτε αποφασιστεί):** το ίδιο το Stripe integration — serverless function (Netlify Functions ή Supabase Edge Functions, κανένα scaffold δεν υπάρχει ακόμα) για το PaymentIntent + webhook που κάνει το order `completed`. Επίσης εκτός scope: μια λίστα "όλες οι παραγγελίες μου" στο Fan Dashboard (`FanOrdersRoute.jsx` παραμένει placeholder, δεν συνδέθηκε με τα νέα tables σήμερα — εύκολο follow-up μόλις υπάρχουν πραγματικά completed orders).
+
+**Για την επόμενη φορά, με προτεραιότητα:**
+1. Ο χρήστης τρέχει το migration `20260914150000_add_orders_checkout.sql` στο Supabase (μετά από ενεργοποίηση pg_cron extension).
+2. Ζωντανό browser test ολόκληρου του flow (βλ. παραπάνω).
+3. Commit + push της σημερινής δουλειάς.
+4. Απόφαση πότε χτίζεται το πραγματικό Stripe integration (serverless function + webhook) — μεγάλο, ξεχωριστό task.
+
+---
+
+## 🔗 Product overview: νέα, μοιράσιμη σελίδα προϊόντος (14/9)
+
+Ρητό αίτημα χρήστη, με reference component (Tailwind Plus product page) που έστειλε ο ίδιος: "ένα component το οποίο να είναι product overview για να μπορεί να το κάνει share το link". Ερωτήθηκε ρητά (AskUserQuestion) πού θα ζει σε σχέση με το υπάρχον "Γρήγορη αγορά" modal (`ProductQuickShop`/`ProductModalRoute`, στο `merch/product/:productId`) — ο χρήστης διάλεξε **νέα, ξεχωριστή σελίδα** (όχι αντικατάσταση, όχι modal).
+
+**Νέο route:** `merch/overview/:productId` (`main.jsx`) — flat sibling, ίδιο μοτίβο με `merch/order/:orderId` (πραγματική σελίδα, αντικαθιστά το grid, όχι modal πάνω του). Δέχεται UUID ή slug (`isUuid` helper, ίδιο pattern με `ProductModalRoute`/`EventModalRoute`).
+
+**Νέο αρχείο:** `components/Merch/ProductOverviewRoute.jsx` — προσαρμογή του reference σε πραγματικά δεδομένα/πατέρνα του project, ΧΩΡΙΣ τα fake/placeholder κομμάτια του Tailwind demo:
+- Αφαιρέθηκαν εντελώς: reviews/ratings (ρητό αίτημα — "επειδή είσαι έξυπνος δεν θα χρησιμοποιήσεις τις κριτικές"), το "Fabric & Care" bullet list και το "Policies" section (delivery/loyalty) — καμία αντίστοιχη στήλη υπάρχει στο πραγματικό `products` schema, θα ήταν fake copy.
+- Gallery: πραγματικά `product.image_urls`, όχι static assets.
+- Χρώμα/Μέγεθος: κρατήθηκε ΜΟΝΟ το μέγεθος (decorative-only, ίδιο pattern με το ήδη υπάρχον `ProductQuickShop.jsx` — δεν υπάρχει πεδίο per-size stock). Το fake color swatch ΔΕΝ μεταφέρθηκε (δεν αντιστοιχεί σε καμία πραγματική στήλη, ήταν ήδη disabled/no-op στο quick shop).
+- Προστέθηκε ένδειξη "Προσωρινά εξαντλημένο" από το ήδη υπάρχον `stock_quantity` (το ίδιο πεδίο που ήδη χρησιμοποιεί το `create_order_from_cart` RPC στο checkout) — μόνο ένδειξη/disable του κουμπιού, καμία νέα backend λογική.
+- **Κουμπί κοινοποίησης** (το ζητούμενο): `navigator.share()` όταν υποστηρίζεται (native share sheet), αλλιώς `navigator.clipboard.writeText()` + `toast.success` (sonner, ίδιο pattern με `EventFormPage.jsx`/`DeleteEventDialog.jsx`).
+- Favorite toggle (heart icon) — ίδιο hook (`useFavorites`/`useToggleFavorite`) με `ProductList.jsx`, για συνέπεια.
+- "Προσθήκη στο καλάθι" μέσω του ήδη υπάρχοντος `context.onAddToCart` (Outlet context από `Header.jsx`) — ίδιο pattern με `ProductQuickShop.jsx`, δέχεται και αποσυνδεδεμένο επισκέπτη από κοινοποιημένο link (`onRequireAuth`).
+
+**`ProductList.jsx` (MODIFIED):** το κλικ πάνω στη φωτογραφία προϊόντος πήγαινε πριν στο παλιό `ProductGallery.jsx` modal (μόνο φωτογραφίες, τίποτα άλλο) — τώρα πάει στη νέα σελίδα (`/merch/overview/${product.slug}`, **απόλυτο** path γιατί το route είναι flat sibling, όχι nested κάτω από `merch/category/:categoryKey` όπου ζει το `ProductList`). Το "Γρήγορη αγορά" κουμπί/modal ΔΕΝ άλλαξε καθόλου.
+
+**⚠️ Εκκρεμότητα, ρητά ΔΕΝ έγινε χωρίς να ρωτηθεί:** το `components/Merch/ProductGallery.jsx` (το παλιό photo-only modal) έμεινε στο repo, πλέον αχρησιμοποίητο — δεν διαγράφηκε (νέος κανόνας χρήστη, βλ. "Οδηγία προς AI assistant" παρακάτω: καμία διαγραφή χωρίς ρώτημα πρώτα). Να αποφασίσει ο χρήστης αν θα το σβήσει.
+
+**Verification:** `npx eslint` στα 3 αγγιγμένα αρχεία — καθαρό. Πλήρες `npx eslint .` στο project — ίδιο baseline, 19 errors/1 warning, καμία νέα παλινδρόμηση. **Δεν έχει δοκιμαστεί ακόμα ζωντανά σε browser.**
+
+**Για την επόμενη φορά:**
+1. Ζωντανό browser test: κλικ σε φωτογραφία προϊόντος από το merch grid → επιβεβαίωση ότι ανοίγει η νέα σελίδα στο σωστό URL, gallery/περιγραφή/τιμή σωστά, "Προσθήκη στο καλάθι" δουλεύει, κουμπί κοινοποίησης αντιγράφει σωστά το link.
+2. Απόφαση για το `ProductGallery.jsx` (διαγραφή ή όχι).
+3. Commit + push (μαζί με το merch checkout της προηγούμενης ενότητας — ακόμα δεν έχει γίνει κανένα commit σήμερα).
+
+---
+
+## 🟢 StockBadge: reusable badge διαθεσιμότητας (14/9)
+
+Ρητό αίτημα χρήστη, με 4 screenshots reference (breadcrumb, product overview panel, ένα πράσινο "Διαθέσιμα" pill, και η κάρτα του grid) — ήθελε ΕΝΑ reusable component για διαθεσιμότητα stock, να χρησιμοποιείται παντού χωρίς επανάληψη κώδικα, χρωματισμένο σε 4 tiers.
+
+**Πριν το χτίσουμε, έγινε WebSearch/WebFetch** (ρητό αίτημα χρήστη — "αν το έχεις ψάξει, δες πώς τα χωρίζουν μεγάλα eshop") σε άρθρα για low-stock badge UX. Εύρημα: τα περισσότερα e-shop δείχνουν τον ακριβή αριθμό ΜΟΝΟ όταν το απόθεμα είναι χαμηλό (δημιουργεί urgency)· σε υγιές απόθεμα δείχνουν γενικό μήνυμα χωρίς αριθμό. Παρουσιάστηκε στον χρήστη μέσω AskUserQuestion μαζί με τεχνικό περιορισμό (δεν υπάρχει στήλη max/αρχικού stock στο `products` schema, άρα τα κατώφλια είναι σε απόλυτα τεμάχια, όχι ποσοστό). **Ο χρήστης αποφάσισε:** πάντα ακριβής αριθμός, σε όλα τα tiers (ρητά διαφορετικό από το "industry standard" — συνειδητή επιλογή του, όχι λάθος μου).
+
+**Νέο αρχείο:** `components/Merch/StockBadge.jsx` — ένα σημείο αλήθειας, δέχεται `quantity` (= `product.stock_quantity`) + προαιρετικό `className`:
+- `0` → κόκκινο, "Εξαντλημένο"
+- `1–2` → πορτοκαλί, "Ελάχιστα διαθέσιμα (N)"
+- `3–5` → κίτρινο, "Λιγοστά διαθέσιμα (N)"
+- `6+` → πράσινο, "Διαθέσιμα (N)"
+- `null`/`undefined` (προϊόν χωρίς tracked stock) → δεν εμφανίζει τίποτα.
+
+**Χρησιμοποιείται σε 2 σημεία** (ρητό αίτημα — "από τη στιγμή που πατάει ο fan στο merch store" μέχρι και το μεμονωμένο προϊόν):
+- `ProductList.jsx` (κάρτα στο grid) — μόνο το badge, κάτω από τιμή/κατηγορία.
+- `ProductOverviewRoute.jsx` (η νέα σελίδα προϊόντος, βλ. ενότητα παραπάνω) — αντικατέστησε το πρόχειρο "Προσωρινά εξαντλημένο" text που είχα βάλει αρχικά.
+
+Δεν άγγιξε το `ProductQuickShop.jsx` (το "Γρήγορη αγορά" modal) — δεν ζητήθηκε, ρητός κανόνας "καμία πρωτοβουλία χωρίς ρώτημα".
+
+**Bug fix στο ίδιο πέρασμα:** το κουμπί κοινοποίησης (`ProductOverviewRoute.jsx`, `handleShare`) έσκαγε με `TypeError: Cannot read properties of undefined (reading 'writeText')` όταν δοκιμάστηκε — root cause: το `navigator.clipboard` υπάρχει ΜΟΝΟ σε secure context (https/localhost), plain http το κάνει undefined. Fix: legacy `document.execCommand("copy")` fallback όταν λείπουν και τα δύο (`navigator.share` και `navigator.clipboard`).
+
+**Verification:** `npx eslint` καθαρό στα αγγιγμένα αρχεία, πλήρες `npx eslint .` ίδιο baseline (19/1). **Δεν έχει δοκιμαστεί ακόμα ζωντανά.**
+
+**Για την επόμενη φορά:**
+1. Ζωντανό test: merch grid → badge σωστό ανά προϊόν, ίδιο badge στη σελίδα overview, κουμπί κοινοποίησης πλέον δεν σκάει.
+2. Ακόμα εκκρεμεί: commit + push όλης της σημερινής δουλειάς (merch checkout + product overview + StockBadge) — τίποτα δεν έχει γίνει commit σήμερα.
+3. Απόφαση για το αχρησιμοποίητο πλέον `ProductGallery.jsx` (βλ. προηγούμενη ενότητα).
+
+---
+
+## 🐞 Bug fix: κανένα όριο στην ποσότητα καλαθιού vs. πραγματικό stock (15/9)
+
+**Εύρημα χρήστη (screenshots):** στη σελίδα product overview, έβαλε ποσότητα 20 σε προϊόν με μόνο 15 διαθέσιμα και το κουμπί "Προσθήκη στο καλάθι" το δέχτηκε κανονικά — το `+` stepper δεν είχε ΚΑΝΕΝΑ όριο.
+
+**Διευκρίνιση προς τον χρήστη (σημαντικό, να μείνει καταγεγραμμένο):** το πραγματικό stock ΔΕΝ κινδύνεψε ποτέ — το `create_order_from_cart` RPC (βλ. ενότητα merch checkout παραπάνω) κάνει ήδη atomic έλεγχο στο checkout (`UPDATE ... WHERE stock_quantity >= qty`) και θα απέρριπτε την παραγγελία με `insufficient_stock`. Το πρόβλημα ήταν ΜΟΝΟ στο frontend UX: ο fan έβλεπε παραπλανητικό αριθμό στο καλάθι, θα ανακάλυπτε το πρόβλημα μόνο στο checkout, όχι νωρίτερα.
+
+**Fix σε 3 σημεία** (ίδιο σημείο αλήθειας παντού — `stock_quantity` μείον ό,τι ΗΔΗ υπάρχει στο καλάθι για το ίδιο προϊόν):
+- `ProductOverviewRoute.jsx` — διαβάζει τώρα το καλάθι (`useCart`), υπολογίζει `maxAddable = stock_quantity - existingCartQty`, κόβει το `+` εκεί, δείχνει μήνυμα ("X ήδη στο καλάθι σου — μέγιστο ακόμα Y" / "Έχεις ήδη όλη τη διαθέσιμη ποσότητα").
+- `ProductQuickShop.jsx` — ίδια λογική· χρειάστηκε να περάσουν `fanId`/`tenantId` ως νέα props από `ProductModalRoute.jsx` (δεν τα είχε πριν, δεν χρειαζόταν το καλάθι μέχρι τώρα).
+- `CartDialog.jsx` — το `+` stepper (αύξηση ήδη υπάρχουσας γραμμής) κόβεται στο `product.stock_quantity`.
+- `null`/`undefined` `stock_quantity` (προϊόν χωρίς tracked stock) = χωρίς όριο, σε όλα τα σημεία — συνέπεια με το υπάρχον `isOutOfStock` pattern.
+
+**Verification:** `npx eslint` καθαρό σε όλα τα αγγιγμένα αρχεία, πλήρες `npx eslint .` ίδιο baseline (19/1).
+
+**Για την επόμενη φορά:** ζωντανό test — δοκίμασε να ξεπεράσεις το διαθέσιμο stock και από τα 3 σημεία (product overview, quick shop modal, cart dialog), επιβεβαίωσε ότι το + απενεργοποιείται σωστά και ότι το μήνυμα είναι κατανοητό.
+
+---
+
+## 👕 Stock ανά μέγεθος (product_variants) — Plan Mode (15/9)
+
+Ρητό αίτημα χρήστη, μετά το bug fix του quantity cap παραπάνω: τα κουμπιά μεγέθους (S/M/L/XL) ήταν αμιγώς διακοσμητικά (`PLACEHOLDER_SIZES`, καμία σύνδεση με stock). Ζήτησε: κάθε κουμπί μεγέθους χρωματισμένο με την ίδια κλίμακα του `StockBadge.jsx`, disabled στο κόκκινο (0 τεμάχια), ενώ το αθροιστικό badge (κάρτα grid + πάνω στη σελίδα προϊόντος) μένει όπως είναι. Ζήτησε ρητά να σκεφτούμε "κάθε πιθανό λογικό bug" πριν χτιστεί — μπήκαμε σε Plan Mode (πλάνο: `/root/.claude/plans/fuzzy-wiggling-fog.md`), εγκρίθηκε, υλοποιήθηκε.
+
+**Νέο migration:** `supabase/migrations/20260915120000_add_product_variants.sql` (**εκκρεμεί να το τρέξει ο χρήστης**):
+- Νέος πίνακας `product_variants` (product_id, size ∈ {S,M,L,XL}, stock_quantity, unique ανά product+size), δημόσιο SELECT (`using (true)`, ίδιο μοτίβο με το catalog).
+- `cart_items` + `order_items` παίρνουν νέα στήλη `variant_id` (nullable — NULL = προϊόν χωρίς μεγέθη, ΑΚΡΙΒΩΣ το σημερινό behavior, backward compatible). `order_items` παίρνει επιπλέον `size_label` (snapshot, ίδιο μοτίβο με `unit_price`).
+- `create_order_from_cart`/`expire_stale_orders`: `create or replace` (ίδιο signature/όνομα — το ήδη active pg_cron job τα καλεί με όνομα, καμία επανεγγραφή cron χρειάστηκε). Το atomic "δέσμευσε αν υπάρχει απόθεμα" πάει σε `product_variants` όταν η γραμμή καλαθιού έχει `variant_id`, αλλιώς στο `products` όπως πριν.
+
+**⚠️ Backfill, δουλειά του χρήστη, ΔΕΝ έγινε από εμένα:** τα υπάρχοντα clothing προϊόντα (π.χ. το δοκιμαστικό T-Shirt Roosters) δεν έχουν καμία γραμμή σε `product_variants` μέχρι να προστεθούν χειροκίνητα στο Supabase — δεν επινοήθηκαν αριθμοί. Μέχρι τότε το UI δείχνει ρητά "Δεν υπάρχουν ακόμα μεγέθη καταχωρημένα" αντί για ψεύτικα κουμπιά.
+
+**Frontend:**
+- `lib/stockTiers.js` (ΝΕΟ) — τα tiers/χρώματα του `StockBadge.jsx` μετακινήθηκαν εδώ (named exports `getStockTier`/`getTotalStock`) γιατί το eslint `react-refresh/only-export-components` απαγορεύει non-component exports σε αρχείο με default component export· ένα σημείο αλήθειας, χρησιμοποιείται από `StockBadge.jsx` ΚΑΙ `SizeSelector.jsx`.
+- `SizeSelector.jsx` (ΝΕΟ) — αντικαθιστά τα ΔΙΠΛΑ αντιγραμμένα decorative μπλοκ (μαζί με το εντελώς ψεύτικο/ανενεργό χρωματικό swatch, αφαιρέθηκε) σε `ProductQuickShop.jsx` ΚΑΙ `ProductOverviewRoute.jsx` — ένα component, ένα σημείο αλήθειας για χρώμα/disabled ανά μέγεθος.
+- `useProducts.js`: `select('*, product_variants(*)')`. `useCart.js`: query φέρνει και `variant(...)`· **bug fix**: το `addItem` matchάρει πλέον σε `(product.id, variantId)` μαζί (πριν ήταν μόνο `product.id` — δύο διαφορετικά μεγέθη του ΙΔΙΟΥ προϊόντος θα συγχωνεύονταν λάθος σε μία γραμμή)· **δεύτερο bug fix**: `updateQuantity`/`removeItem` άλλαξαν από key `productId` σε key `cart_items.id` (ένα προϊόν μπορεί τώρα να έχει πολλαπλές γραμμές, μία ανά μέγεθος — το `productId` δεν αρκούσε πια για μονοσήμαντη αναφορά).
+- `ProductOverviewRoute.jsx`/`ProductQuickShop.jsx`: το quantity cap (χθεσινό bug fix) υπολογίζεται πλέον στο stock του ΕΠΙΛΕΓΜΕΝΟΥ μεγέθους, όχι στο αθροιστικό — αλλιώς θα επέτρεπε π.χ. 8 Small ενώ υπάρχουν μόνο 2. "Προσθήκη στο καλάθι" disabled μέχρι να επιλεγεί μέγεθος (clothing με πραγματικά variants).
+- `CartDialog.jsx`: δείχνει το μέγεθος ανά γραμμή, το `+` κόβεται στο σωστό (ανά variant) stock.
+- `OrderSummaryRoute.jsx`: δείχνει `size_label` ανά γραμμή· `handleReAddToCart` περνάει πλέον και το `variant_id`.
+- `Header.jsx` (`handleAddToCart`): τρίτο, προαιρετικό όρισμα `variantId`, περνάει μέχρι το `addItem`.
+
+**Verification:** `npx eslint` καθαρό σε όλα τα αγγιγμένα αρχεία, πλήρες `npx eslint .` ίδιο baseline (19/1). **Δεν έχει τρέξει ακόμα το migration ούτε έχει δοκιμαστεί ζωντανά.**
+
+**Για την επόμενη φορά:**
+1. Ο χρήστης τρέχει το migration `20260915120000_add_product_variants.sql`.
+2. Ο χρήστης προσθέτει χειροκίνητα 2-3 `product_variants` γραμμές στο δοκιμαστικό T-Shirt (π.χ. S=10, M=5, L=2, XL=0) για πραγματικό test data.
+3. Ζωντανό browser test — βλ. πλήρη λίστα ελέγχων στο πλάνο (`/root/.claude/plans/fuzzy-wiggling-fog.md`, ενότητα Verification): χρώματα/disabled ανά μέγεθος, blocked χωρίς επιλογή, δύο μεγέθη = δύο γραμμές καλαθιού, cap ανά μέγεθος όχι αθροιστικά, checkout αφαιρεί από το σωστό variant.
+4. Commit + push όλης της σημερινής δουλειάς (merch checkout, product overview, StockBadge, bug fixes, product variants) — τίποτα δεν έχει γίνει commit ακόμα.
+
+---
+
+## 🔒 RLS security audit (14-15/9, ρητό αίτημα χρήστη: "δεν θέλω να είναι τρύπιο το σύστημα")
+
+Ο χρήστης ζήτησε πλήρη έλεγχο RLS σε όλους τους πίνακες/συναρτήσεις αυτής της
+συνεδρίας (orders, order_items, product_variants, cart_items, favorites,
+products, adjust_cart_quantity, create_order_from_cart, expire_stale_orders).
+Δεν μπόρεσα να τεστάρω live μέσω API (το δίκτυο του device_bash μπλοκάρει το
+domain του Supabase — `blocked-by-allowlist`), οπότε ο χρήστης έτρεξε ο ίδιος
+read-only SQL queries στο Supabase SQL editor και έστειλε screenshots/αποτελέσματα.
+
+**Επιβεβαιωμένο ΟΚ:**
+- `orders`/`order_items`/`product_variants`: RLS σωστό (verified από τα δικά μου migrations).
+- `cart_items`, `favorites`, `event_favorites`: RLS ενεργό, policies σωστά scoped σε `fan_id = auth.uid()` (verified από screenshots του χρήστη).
+- `products`: RLS ενεργό, δημόσιο SELECT-only (`using (true)`), καμία write policy για απλό χρήστη.
+- `adjust_cart_quantity` (undocumented RPC, χωρίς migration — ο χρήστης έφερε το σώμα της): έχει `and fan_id = auth.uid()` στο WHERE — ασφαλές, κάποιος άλλος δεν μπορεί να πειράξει ξένο καλάθι.
+- `create_order_from_cart`: έχει `auth.uid() = p_fan_id` εσωτερικό έλεγχο (verified από migration).
+
+**Βρέθηκε και διορθώθηκε (όχι ενεργό ρίσκο, αλλά grants δεν ταίριαζαν με την πρόθεση):**
+οι 3 RPC συναρτήσεις (`create_order_from_cart`, `expire_stale_orders`,
+`adjust_cart_quantity`) είχαν EXECUTE grant στο `PUBLIC` (default συμπεριφορά
+Postgres στο CREATE FUNCTION) — δηλαδή τεχνικά και ο `anon` μπορούσε να τις
+καλέσει, παρόλο που οι εσωτερικοί έλεγχοι τον μπλόκαραν στην πράξη. Νέο
+migration `20260915130000_tighten_function_execute_grants.sql`: αφαιρεί
+EXECUTE από `public`/`anon` και στις 3, ξαναδίνει σε `authenticated` μόνο
+στις 2 που πραγματικά το χρειάζονται (`create_order_from_cart`,
+`adjust_cart_quantity`) — το `expire_stale_orders` μένει χωρίς κανένα grant
+(τρέχει μόνο μέσω pg_cron ως owner). Καμία αλλαγή σε δεδομένα/tables/RLS
+policies, καμία αλλαγή συμπεριφοράς για συνδεδεμένους fans. **Ο χρήστης
+ενέκρινε ρητά** ("nai graptso gia na to kleinoume"). Ο χρήστης το έτρεξε και
+επιβεβαίωσε με νέο query 3: `create_order_from_cart`/`adjust_cart_quantity`
+σωστά (μόνο authenticated/postgres/service_role), αλλά το
+`expire_stale_orders` είχε ακόμα `authenticated` (default privilege του
+Supabase, το πρώτο migration αφαίρεσε μόνο public/anon — δικό μου παράλειψη).
+Follow-up migration `20260915140000_revoke_expire_stale_orders_authenticated.sql`
+(`revoke execute on function expire_stale_orders() from authenticated;`),
+εγκρίθηκε ρητά ("nai thelw na to kleinoume"). **Εκκρεμότητα:** να τρέξει κι
+αυτό ο χρήστης στο Supabase SQL editor.
+
+## 🧹 Καθαρισμός test δεδομένων tenant "Villagers" από το merch (15/9)
+
+Κατά το ζωντανό τεστ του stock-ανά-μέγεθος (product_variants), το backfill
+script (βλ. ενότητα RLS audit παραπάνω) μπήκε κατά λάθος στο πρώτο
+clothing-προϊόν που βρήκε (`order by created_at limit 1`) -- το οποίο
+ανήκε σε άλλον tenant ("Villagers"), όχι στον tenant ΣΤΡΑΦΙ που δοκιμάζει
+ο χρήστης. Αυτό αποκάλυψε ότι υπήρχαν ήδη test/demo merch δεδομένα για τον
+tenant Villagers (2 προϊόντα: "Villagers Hoodie", "Villagers T-Shirt
+Black") που ο χρήστης δεν ήθελε να κρατήσει.
+
+**Ρητό αίτημα χρήστη:** διαγραφή όλων των merch δεδομένων του tenant
+Villagers (προϊόντα + ό,τι τα αναφέρει), ρητά scoped στο merch, όχι
+ολόκληρος ο tenant. Πριν τη διαγραφή δόθηκε στον χρήστη read-only
+diagnostic query που έδειξε το ακριβές scope (2 products, 4
+product_variants, 2 cart_items, 0 order_items, 2 favorites), και μετά το
+ακριβές DELETE script (σωστή σειρά -- πρώτα cart_items/favorites/
+order_items/product_variants, μετά products). Ο χρήστης το έτρεξε και
+επιβεβαίωσε: 0 products, 0 product_variants για τον tenant Villagers.
+**Ολοκληρώθηκε.**
+
+Ο tenant ΣΤΡΑΦΙ (5 clothing προϊόντα: T-Shirt Roosters, T-Shirt ΣΤΡΑΦΙ
+Daisy, T-Shirt ΣΤΡΑΦΙ Μαύρο, κ.λπ.) ΔΕΝ αγγίχθηκε -- είναι ο tenant πάνω
+στον οποίο συνεχίζεται το testing. Κανένα από αυτά δεν έχει ακόμα
+`product_variants` backfilled -- παραμένει εκκρεμότητα, με πραγματικά
+νούμερα από τον χρήστη (όχι επινοημένα).
+
+## ✅ Backfill product_variants για tenant ΣΤΡΑΦΙ (15/9)
+
+Μετά τον καθαρισμό του tenant Villagers (βλ. ενότητα παραπάνω), backfill
+σωστά στοχευμένο με `tenant_id` (όχι "πρώτο που βρω" όπως την πρώτη φορά)
+σε ΟΛΑ τα clothing προϊόντα του tenant ΣΤΡΑΦΙ: T-Shirt Roosters, T-Shirt
+ΣΤΡΑΦΙ Daisy, T-Shirt ΣΤΡΑΦΙ Μαύρο. Δοκιμαστικά νούμερα σε όλα (S=10, M=5,
+L=2, XL=0 -- καλύπτει και τα 4 tiers χρώματος: πράσινο/κίτρινο/πορτοκαλί/
+κόκκινο-disabled ανά προϊόν). Ο χρήστης επιβεβαίωσε το αποτέλεσμα, 12
+γραμμές σύνολο (3 προϊόντα × 4 μεγέθη). **Έτοιμο για ζωντανό browser test.**
+
+## 🐞 Bug fix: το "Ακολούθησε/Ακολουθείς" κρυβόταν πίσω από το cover image (15/9)
+
+Ρητή αναφορά χρήστη: το follow button (+ τα search/αγαπημένα/καλάθι
+εικονίδια δίπλα του, όταν συνδεδεμένος) κάποιες φορές δεν φαινόταν καθόλου
+-- "μπαίνει πιο πάνω, κάτω από το cover image".
+
+**Διάγνωση, ζωντανά επιβεβαιωμένη** (Claude in Chrome πάνω στο ήδη
+συνδεδεμένο tab του χρήστη, σε 375px πλάτος -- ο χρήστης έκανε το login ο
+ίδιος, καμία επαφή με credentials): `document.elementFromPoint()` πάνω στις
+ακριβείς συντεταγμένες του κουμπιού γύρναγε το `<img>` του cover, όχι το
+κουμπί -- πραγματικό CSS stacking bug, όχι conditional-render bug. Αιτία:
+το cover-image wrapper div είναι `position: relative` (για να κουμπώσει
+πάνω του το pencil-icon overlay του `EditCoverImageDialog`). Σε CSS, ένα
+`position: relative` στοιχείο (ΑΚΟΜΑ και χωρίς z-index) ζωγραφίζεται σε
+ανώτερο layer από static/non-positioned αδέρφια, ΑΝΕΞΑΡΤΗΤΑ από τη σειρά
+στο DOM. Το avatar γλίτωνε γιατί το δικό του wrapper είναι ΕΠΙΣΗΣ
+`relative` (ίδιος λόγος: `EditLogoImageDialog` overlay) -- το follow-button
+row όμως ήταν static, άρα έμενε ΠΑΝΤΑ από κάτω από το cover image όποτε το
+αρνητικό margin (`-mt-12`/`sm:-mt-14`) τα έκανε να επικαλύπτονται.
+
+**Fix, ζωντανά τεστ πριν εφαρμοστεί** (πρόσθεσα `position: relative` στο
+row μέσω browser console, επιβεβαίωσα με `elementFromPoint` ότι το κουμπί
+βγαίνει πλέον από πάνω, ΜΕΤΑ έγραψα τον πραγματικό κώδικα):
+`Header.jsx` -- η γραμμή `<div className="-mt-12 flex items-end gap-4
+sm:-mt-14">` έγινε `<div className="relative -mt-12 flex items-end gap-4
+sm:-mt-14">`. Μονή αλλαγή, καμία άλλη επίπτωση. `npx eslint .`
+επιβεβαιώθηκε αμετάβλητο baseline (19/1).
 
 ## Οδηγία προς AI assistant (Claude ή άλλο)
 
 > Λειτούργησε σαν senior SaaS architect. Μην αλλάζεις αποφάσεις που έχουν ήδη παρθεί (multi-tenant μοντέλο, fan ownership στο Concerto με κεντρικό auth, custom/dynamic ticket types, subscription-based tickets-per-event όριο, δομή Radix/shadcn στα UI components) χωρίς να αιτιολογήσεις ρητά γιατί. Όταν δίνεται reference component, ακολούθησε αυστηρά τη δομή του. Συνέχισε από τα "Επόμενα βήματα" παραπάνω.
+>
+> **Κανόνας του χρήστη (14/9):** Ποτέ μην κάνεις πρωτοβουλία σε κάτι "από την αρχή" — και ειδικά καμία διαγραφή (δεδομένων, jobs, αρχείων, migrations, ό,τι) — χωρίς να ρωτήσεις πρώτα τον χρήστη και να πάρεις ρητή απάντηση. Αυτό ισχύει ακόμα κι αν κάτι φαίνεται προφανές, ασφαλές, ή προϋπάρχον/undocumented. Ό,τι κάνεις, ενημέρωσε τον χρήστη μετά.

@@ -1,16 +1,15 @@
-import { useState } from "react"
 import { HeartIcon, ShoppingCartIcon } from "@heroicons/react/24/outline"
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
-import ProductGallery from "./ProductGallery"
+import StockBadge from "./StockBadge"
+import { getTotalStock } from "../../lib/stockTiers"
 
 export default function ProductList({ products, fanId, tenantId, isLoggedIn, onRequireAuth }) {
   const { data: favoriteIds = [] } = useFavorites(fanId, tenantId)
   const toggleFavorite = useToggleFavorite(fanId)
-  const [galleryProduct, setGalleryProduct] = useState(null)
 
   function handleToggleFavorite(e, productId) {
     e.stopPropagation()
@@ -33,12 +32,15 @@ export default function ProductList({ products, fanId, tenantId, isLoggedIn, onR
               <Card key={product.id} className="relative shadow-lg">
                 <CardContent>
                   <div className="relative overflow-hidden rounded-md ring-1 ring-foreground/10">
-                    <img
-                      alt={product.name}
-                      src={product.image_urls?.[0]}
-                      onClick={() => setGalleryProduct(product)}
-                      className="aspect-square w-full cursor-pointer object-cover hover:opacity-75"
-                    />
+                    {/* 14/9: πήγαινε στη μοιράσιμη σελίδα προϊόντος (πραγματική
+                        σελίδα, όχι το παλιό photo-only ProductGallery modal). */}
+                    <Link to={`/merch/overview/${product.slug}`}>
+                      <img
+                        alt={product.name}
+                        src={product.image_urls?.[0]}
+                        className="aspect-square w-full cursor-pointer object-cover hover:opacity-75"
+                      />
+                    </Link>
 
                     <button
                       type="button"
@@ -69,6 +71,8 @@ export default function ProductList({ products, fanId, tenantId, isLoggedIn, onR
                     </p>
                   </div>
 
+                  <StockBadge quantity={getTotalStock(product)} className="mt-2" />
+
                   {/* asChild + Link: πραγματικό <a>, ίδιο styling με το Button
                       (ίδιο Radix Slot pattern με DialogTrigger/DialogClose asChild) */}
                   <Button asChild variant="outline" className="mt-3 w-full">
@@ -83,8 +87,6 @@ export default function ProductList({ products, fanId, tenantId, isLoggedIn, onR
           })}
         </div>
       </div>
-
-      <ProductGallery product={galleryProduct} onClose={() => setGalleryProduct(null)} />
     </div>
   )
 }

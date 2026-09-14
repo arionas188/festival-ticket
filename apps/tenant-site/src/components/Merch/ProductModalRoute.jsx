@@ -42,6 +42,8 @@ export default function ProductModalRoute() {
       onAddToCart={context.onAddToCart}
       isLoggedIn={context.isLoggedIn}
       onRequireAuth={context.onRequireAuth}
+      fanId={context.fanId}
+      tenantId={context.tenantId}
     />
   )
 }
