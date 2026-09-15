@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { useProducts } from "../queries/useProducts"
+import { CATEGORY_LABELS } from "../lib/merchCategories"
 
 const SIX_MONTHS_MS = 1000 * 60 * 60 * 24 * 30 * 6
 
@@ -25,17 +26,17 @@ export function useMerchCategories(tenantId) {
       },
       {
         key: "clothing",
-        title: "Ρουχισμός",
+        title: CATEGORY_LABELS.clothing,
         items: all.filter((p) => p.category === "clothing"),
       },
       {
         key: "music",
-        title: "CD & Βινύλια",
+        title: CATEGORY_LABELS.music,
         items: all.filter((p) => p.category === "music"),
       },
       {
         key: "various",
-        title: "Διάφορα",
+        title: CATEGORY_LABELS.various,
         items: all.filter((p) => p.category === "various"),
       },
     ].filter((cat) => cat.items.length > 0)

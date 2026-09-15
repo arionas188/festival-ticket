@@ -10,22 +10,29 @@ const TIERS = [
     test: (q) => q <= 0,
     className: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20",
     label: () => "Εξαντλημένο",
+    // 15/9: shortLabel -- ίδιο κείμενο ΧΩΡΙΣ τον αριθμό, ρητό αίτημα χρήστη
+    // ο ακριβής αριθμός να φαίνεται ΜΟΝΟ μέσα στη σελίδα προϊόντος (StockBadge
+    // showCount=false στην κάρτα του grid, βλ. ProductList.jsx).
+    shortLabel: "Εξαντλημένο",
   },
   {
     test: (q) => q <= 2,
     className: "bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20",
     label: (q) => `Ελάχιστα διαθέσιμα (${q})`,
+    shortLabel: "Ελάχιστα διαθέσιμα",
   },
   {
     test: (q) => q <= 5,
     className: "bg-yellow-50 text-yellow-800 ring-1 ring-inset ring-yellow-600/20",
     label: (q) => `Λιγοστά διαθέσιμα (${q})`,
+    shortLabel: "Λιγοστά διαθέσιμα",
   },
   {
     // 6+ — καμία επιπλέον συνθήκη, είναι το τελευταίο tier (catch-all).
     test: () => true,
     className: "bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20",
     label: (q) => `Διαθέσιμα (${q})`,
+    shortLabel: "Διαθέσιμα",
   },
 ]
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useOrder } from "../../queries/useOrder"
 import { useCart } from "../../queries/useCart"
+import MerchBreadcrumb from "./MerchBreadcrumb"
 
 // Δεκάλεπτο countdown μέχρι το expires_at της παραγγελίας, σε mm:ss. Το
 // pg_cron (βλ. migration 20260914150000) τρέχει κάθε λεπτό server-side και
@@ -75,8 +76,21 @@ export default function OrderSummaryRoute() {
   const isPending = order.status === "pending"
 
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-4 p-4 pb-24 sm:p-6">
-      <h1 className="font-heading text-lg font-medium">Η παραγγελία σου</h1>
+    <>
+      {/* 15/9, ρητό αίτημα χρήστη: ίδιο breadcrumb σε ΟΛΟ το merch flow,
+          συμπεριλαμβανομένης και αυτής της τελευταίας σελίδας — πριν δεν
+          υπήρχε καθόλου εδώ. Πλέον sibling ΠΡΙΝ από το root div (ίδιο
+          μοτίβο με όλες τις σελίδες merch) — βλ. MerchBreadcrumb.jsx για
+          sticky/κεντράρισμα. */}
+      <MerchBreadcrumb
+        crumbs={[
+          { label: "Merch Store", to: "/merch" },
+          { label: "Παραγγελία", to: `/merch/order/${orderId}` },
+        ]}
+      />
+
+      <div className="mx-auto flex max-w-xl flex-col gap-4 p-4 pb-24 sm:p-6">
+        <h1 className="font-heading text-lg font-medium">Η παραγγελία σου</h1>
 
       {isPending && (
         <div className="flex items-center justify-between rounded-lg bg-gray-50 p-3 text-sm">
@@ -138,5 +152,6 @@ export default function OrderSummaryRoute() {
         Πληρωμή
       </Button>
     </div>
+    </>
   )
 }

@@ -11,27 +11,10 @@ import {
 } from "@/components/ui/dialog"
 import { useCart } from "../../queries/useCart"
 import { useCreateOrder } from "../../queries/useCreateOrder"
-
-// Μεταφράζει τα exception messages του create_order_from_cart RPC (βλ.
-// migration 20260914150000_add_orders_checkout.sql) σε κάτι κατανοητό για
-// τον fan — το πιο συχνό, αναμενόμενο σενάριο είναι insufficient_stock
-// (κάποιος άλλος αγόρασε το τελευταίο ίδιο τη στιγμή του checkout).
-function checkoutErrorMessage(error) {
-  const raw = error?.message || ""
-  if (raw.includes("insufficient_stock")) {
-    const productName = raw.split(":").slice(1).join(":").trim()
-    return productName
-      ? `Δυστυχώς το "${productName}" μόλις εξαντλήθηκε — αφαίρεσέ το ή μείωσε την ποσότητα.`
-      : "Κάποιο προϊόν στο καλάθι σου μόλις εξαντλήθηκε."
-  }
-  if (raw.includes("empty_cart")) {
-    return "Το καλάθι σου είναι άδειο."
-  }
-  return "Κάτι πήγε στραβά με την ολοκλήρωση της παραγγελίας. Δοκίμασε ξανά."
-}
+import { checkoutErrorMessage } from "../../lib/checkoutErrors"
 
 export default function CartDialog({ open, onOpenChange, fanId, tenantId }) {
-  const { items, removeItem, updateQuantity, subtotal } = useCart(fanId, tenantId)
+  const { items, removeItem, updateQuantity, clearCart, subtotal } = useCart(fanId, tenantId)
   const createOrder = useCreateOrder(fanId, tenantId)
   const [checkoutError, setCheckoutError] = useState(null)
   const navigate = useNavigate()
@@ -49,11 +32,32 @@ export default function CartDialog({ open, onOpenChange, fanId, tenantId }) {
     })
   }
 
+  // 15/9, ρητό αίτημα χρήστη: "ή να αφαιρέσει όλο το καλάθι" — ξεχωριστό
+  // από το per-item remove (το κάθε προϊόν έχει ήδη το δικό του κάδο
+  // παραπάνω). window.confirm εδώ επίτηδες: καταστροφική, μη αναστρέψιμη
+  // ενέργεια — ίδιο μοτίβο με native confirmation prompts σε e-shops.
+  function handleClearCart() {
+    if (window.confirm("Να αδειάσει όλο το καλάθι σου;")) {
+      clearCart()
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Το καλάθι σου</DialogTitle>
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle>Το καλάθι σου</DialogTitle>
+            {items.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearCart}
+                className="text-xs font-medium text-gray-500 hover:text-red-600"
+              >
+                Άδειασμα καλαθιού
+              </button>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">

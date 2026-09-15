@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { Link, Outlet, useOutletContext, useParams } from "react-router-dom"
 import ProductFilters from "./ProductFilters"
 import ProductList from "./ProductList"
+import MerchBreadcrumb from "./MerchBreadcrumb"
 import CardGridSkeleton from "@/components/ui/card-grid-skeleton"
 import { useMerchCategories } from "../../hooks/useMerchCategories"
 
@@ -46,27 +47,37 @@ export default function MerchCategoryRoute() {
   }
 
   return (
-    <div className="bg-gray-50">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <Link
-          to="/merch"
-          className="mb-2 inline-block text-sm font-medium text-gray-600 hover:text-gray-900"
-        >
-          ← Πίσω στις κατηγορίες
-        </Link>
+    <>
+      {/* 15/9, ρητό αίτημα χρήστη — το breadcrumb πάει ΕΔΩ πλέον, έξω από
+          το bg-gray-50 div: στον λευκό χώρο ανάμεσα στη γραμμή των tabs
+          (Header.jsx) και το γκρι φόντο, ΟΧΙ μέσα στο γκρι. Αντικαθιστά και
+          το παλιό "← Πίσω στις κατηγορίες" link (η πρώτη γραμμή του
+          breadcrumb κάνει ήδη ΤΟ ΙΔΙΟ), ίδιο μοτίβο με τις άλλες σελίδες
+          merch. Κεντραρισμένο (βλ. MerchBreadcrumb.jsx). */}
+      <MerchBreadcrumb
+        crumbs={[
+          { label: "Merch Store", to: "/merch" },
+          { label: category.title, to: `/merch/category/${categoryKey}` },
+        ]}
+      />
 
-        <ProductFilters sortBy={sortBy} onSortChange={setSortBy} />
+      <div className="bg-gray-50">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <ProductFilters sortBy={sortBy} onSortChange={setSortBy} />
 
-        <ProductList
-          products={sortedItems}
-          fanId={context.fanId}
-          tenantId={context.tenantId}
-          isLoggedIn={context.isLoggedIn}
-          onRequireAuth={context.onRequireAuth}
-        />
+          <ProductList
+            products={sortedItems}
+            fanId={context.fanId}
+            tenantId={context.tenantId}
+            isLoggedIn={context.isLoggedIn}
+            onRequireAuth={context.onRequireAuth}
+            categoryKey={category.key}
+            categoryLabel={category.title}
+          />
+        </div>
+
+        <Outlet context={context} />
       </div>
-
-      <Outlet context={context} />
-    </div>
+    </>
   )
 }

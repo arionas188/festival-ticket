@@ -65,9 +65,15 @@ export default function Header({ tenant, settings, onRequireAuth }) {
   }
 
   // 15/9: variantId προαιρετικό, περνάει μέχρι το useCart.addItem — stock
-  // ανά μέγεθος (product_variants, βλ. ProductOverviewRoute.jsx).
-  function handleAddToCart(product, quantity, variantId) {
-    addItem(product, quantity, variantId)
+  // ανά μέγεθος (product_variants, βλ. ProductOverviewRoute.jsx). async/await
+  // εδώ (addItem είναι πλέον mutateAsync) ώστε ο caller (π.χ.
+  // ProductOverviewRoute.jsx) να μπορεί να κάνει await context.onAddToCart(...)
+  // για σειριακές πολλαπλές προσθήκες πριν προχωρήσει σε checkout — χωρίς
+  // αυτό, δύο γρήγορες κλήσεις θα μπορούσαν να τρέξουν ταυτόχρονα και να
+  // χάσουν η μία την ενημέρωση της άλλης (race condition στο "existing"
+  // matching μέσα στο useCart.addItem).
+  async function handleAddToCart(product, quantity, variantId) {
+    await addItem(product, quantity, variantId)
     if (favoriteIds.includes(product.id)) {
       toggleFavorite.mutate({ productId: product.id, isFavorited: true })
     }

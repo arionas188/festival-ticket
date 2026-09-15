@@ -9,6 +9,7 @@ import MerchCategoriesRoute from './components/Merch/MerchCategoriesRoute.jsx'
 import MerchCategoryRoute from './components/Merch/MerchCategoryRoute.jsx'
 import ProductModalRoute from './components/Merch/ProductModalRoute.jsx'
 import OrderSummaryRoute from './components/Merch/OrderSummaryRoute.jsx'
+import CartRoute from './components/Merch/CartRoute.jsx'
 import ProductOverviewRoute from './components/Merch/ProductOverviewRoute.jsx'
 import EventsRoute from './components/Events/EventsRoute.jsx'
 import EventFormRoute from './components/Events/EventFormRoute.jsx'
@@ -65,6 +66,13 @@ const router = createBrowserRouter([
           // τη λίστα αντί να κάθεται πάνω της (πραγματική "σελίδα
           // παραγγελίας", όχι modal).
           { path: 'merch/order/:orderId', element: <OrderSummaryRoute /> },
+          // merch/cart (15/9, ρητό αίτημα χρήστη, reference component δικό
+          // του — "άλλο component που θα έχει τη συνολική παραγγελία"):
+          // ΕΠΙΠΕΔΟ (flat) sibling, ίδιο μοτίβο. Το "Ολοκλήρωση παραγγελίας"
+          // κουμπί στο ProductOverviewRoute.jsx προσθέτει την επιλογή στο
+          // καλάθι και φέρνει εδώ (ΟΧΙ κατευθείαν σε νέα order) — βλ.
+          // CartRoute.jsx.
+          { path: 'merch/cart', element: <CartRoute /> },
           // merch/overview/:productId (14/9, ρητό αίτημα χρήστη — "product
           // overview για να μπορεί να το κάνει share το link"): ΕΠΙΠΕΔΟ (flat)
           // sibling, ίδιο μοτίβο με merch/order/:orderId — πραγματική σελίδα

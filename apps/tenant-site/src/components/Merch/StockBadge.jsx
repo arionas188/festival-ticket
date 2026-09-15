@@ -11,7 +11,12 @@ import { getStockTier } from "../../lib/stockTiers"
 // απαγορεύει non-component exports σε αρχείο με default component export),
 // ώστε ΟΠΟΥΔΗΠΟΤΕ χρειαστεί badge/χρώμα διαθεσιμότητας (grid card, product
 // overview, SizeSelector.jsx) να χρησιμοποιείται το ΙΔΙΟ, όχι ξαναγραμμένη λογική.
-export default function StockBadge({ quantity, className }) {
+// 15/9, ρητό αίτημα χρήστη: στην κάρτα προϊόντος του grid, ο ακριβής
+// αριθμός δεν χρειάζεται πια -- φαίνεται μόνο μέσα στη σελίδα προϊόντος
+// (και στο SizeSelector, ανά μέγεθος). showCount=false δείχνει μόνο το
+// tier text (π.χ. "Διαθέσιμα"), χωρίς το "(N)". Default true -- καμία
+// αλλαγή συμπεριφοράς όπου δεν περάσαμε ρητά false.
+export default function StockBadge({ quantity, className, showCount = true }) {
   // Προϊόν χωρίς tracked stock (null/undefined) — δεν εμφανίζουμε τίποτα,
   // δεν έχουμε πραγματικό δεδομένο για να δείξουμε.
   if (quantity == null) return null
@@ -26,7 +31,7 @@ export default function StockBadge({ quantity, className }) {
         className
       )}
     >
-      {tier.label(quantity)}
+      {showCount ? tier.label(quantity) : tier.shortLabel}
     </span>
   )
 }

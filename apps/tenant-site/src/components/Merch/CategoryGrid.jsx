@@ -2,6 +2,9 @@ import { Link } from "react-router-dom"
 
 // Πραγματικά <Link> αντί για button+onClick: right-click/"open in new tab"
 // δουλεύει, και το href είναι ορατό/crawlable.
+// 15/9: το breadcrumb ΔΕΝ μπαίνει πια εδώ μέσα — μετακόμισε ένα επίπεδο πιο
+// πάνω, στο MerchCategoriesRoute.jsx, ΠΡΙΝ από το bg-gray-50 div (ρητό
+// αίτημα χρήστη: "πάνω από το γκρι, κάτω από τη γραμμή" — βλ. εκεί).
 export default function CategoryGrid({ categories }) {
   const newArrivals = categories.find((c) => c.key === "new")
   const rest = categories.filter((c) => c.key !== "new")

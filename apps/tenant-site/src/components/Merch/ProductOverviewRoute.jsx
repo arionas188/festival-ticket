@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Link, Navigate, useOutletContext, useParams } from "react-router-dom"
+import { Navigate, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom"
 import { HeartIcon, ShareIcon } from "@heroicons/react/24/outline"
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid"
 import { toast } from "sonner"
@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import StockBadge from "./StockBadge"
 import { getTotalStock } from "../../lib/stockTiers"
+import { getCategoryLabel } from "../../lib/merchCategories"
+import MerchBreadcrumb from "./MerchBreadcrumb"
 import SizeSelector from "./SizeSelector"
 import { useProducts } from "../../queries/useProducts"
 import { useCart } from "../../queries/useCart"
@@ -18,12 +20,23 @@ import { isUuid } from "../../lib/isUuid"
 // από το υπάρχον "Γρήγορη αγορά" modal (ProductQuickShop/ProductModalRoute
 // στο merch/product/:productId, που μένει ακριβώς όπως είναι). Flat sibling
 // route, ίδιο μοτίβο με merch/order/:orderId — αντικαθιστά εντελώς το grid
-// αντί να κάθεται από πάνω του (βλ. main.jsx). Το κλικ πάνω στη φωτογραφία
-// προϊόντος στο ProductList.jsx οδηγεί πλέον εδώ αντί για το παλιό
-// photo-only ProductGallery modal.
+// αντί να κάθεται από πάνω του (βλ. main.jsx). Το κλικ πάνω σε ΟΛΟΚΛΗΡΗ την
+// κάρτα προϊόντος στο ProductList.jsx (όχι μόνο τη φωτογραφία, 15/9) οδηγεί
+// πλέον εδώ.
 export default function ProductOverviewRoute() {
   const { productId } = useParams()
   const context = useOutletContext()
+  const navigate = useNavigate()
+  // 15/9, ρητή αναφορά χρήστη: αν ήρθες εδώ πατώντας πάνω σε μια κάρτα μέσα
+  // από μια λίστα κατηγορίας (π.χ. "New Arrivals"), το breadcrumb πρέπει να
+  // θυμάται ΑΥΤΗ τη διαδρομή — όχι να ξαναϋπολογίζει την "πραγματική"
+  // (στατική) κατηγορία του προϊόντος, που μπορεί να είναι διαφορετική
+  // (ένα ρούχο ανήκει ΚΑΙ στο "Ρουχισμός" ΚΑΙ ενδεχομένως στο "New
+  // Arrivals" ταυτόχρονα). Περνάει μέσω router state από το ProductList.jsx
+  // (state, ΟΧΙ query param — έτσι ένα μοιρασμένο/direct link ΔΕΝ το έχει,
+  // και σωστά πέφτει πίσω στην πραγματική κατηγορία, βλ. categoryLabel/
+  // categoryLinkTo παρακάτω).
+  const location = useLocation()
   const { data: products, isLoading } = useProducts(context.tenantId)
   const { data: favoriteIds = [] } = useFavorites(context.fanId, context.tenantId)
   const toggleFavorite = useToggleFavorite(context.fanId)
@@ -33,11 +46,18 @@ export default function ProductOverviewRoute() {
   // check στο checkout) — άρα ποτέ δεν κινδύνευσε πραγματικό stock — αλλά ο
   // fan έβλεπε λάθος/παραπλανητικό UI μέχρι να σκάσει σφάλμα στο checkout.
   // Fix: διαβάζουμε το καλάθι εδώ και υπολογίζουμε πόσο ΑΚΟΜΑ χωράει να
-  // προστεθεί (stock_quantity μείον ό,τι ήδη έχει ο fan στο καλάθι για ΑΥΤΟ
-  // το προϊόν), και κόβουμε το stepper/"Προσθήκη" εκεί.
+  // προστεθεί (stock_quantity μείον ό,τι ήδη έχει ο fan στο καλάθι), και
+  // κόβουμε το stepper/"Προσθήκη" εκεί.
   const { items: cartItems } = useCart(context.fanId, context.tenantId)
-  const [quantity, setQuantity] = useState(1)
-  const [selectedVariantId, setSelectedVariantId] = useState(null)
+
+  // 15/9, ρητό αίτημα χρήστη (screenshots 2-4): αντί για ΕΝΑ επιλεγμένο
+  // μέγεθος + μία κοινή ποσότητα, ο fan μπορεί τώρα να βάλει ποσότητα σε
+  // ΠΟΛΛΑΠΛΑ μεγέθη ταυτόχρονα (π.χ. 2 Small ΚΑΙ 1 Medium στο ίδιο visit) —
+  // variantId -> ποσότητα. Για προϊόντα ΧΩΡΙΣ μεγέθη (music/other, ή
+  // clothing χωρίς backfill ακόμα) χρησιμοποιείται η παλιά, απλή ποσότητα.
+  const [quantities, setQuantities] = useState({})
+  const [simpleQuantity, setSimpleQuantity] = useState(1)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   if (isLoading) {
     return (
@@ -65,45 +85,56 @@ export default function ProductOverviewRoute() {
 
   const isFavorited = favoriteIds.includes(product.id)
 
-  // 15/9: stock ανά μέγεθος (product_variants, βλ. migration 20260915120000).
-  // requiresSizeSelection: μόνο clothing ΜΕ πραγματικές γραμμές variants —
+  // 15/9: stock ανά μέγεθος (product_variants). hasVariants: μόνο clothing
+  // ΜΕ πραγματικές γραμμές variants μπαίνει στο νέο, multi-size flow —
   // clothing χωρίς backfill ακόμα πέφτει πίσω στο παλιό, αθροιστικό
   // behavior (SizeSelector δείχνει ρητά "δεν υπάρχουν ακόμα μεγέθη").
   const hasVariants = Boolean(product.product_variants?.length)
-  const requiresSizeSelection = product.category === "clothing" && hasVariants
-  const selectedVariant =
-    product.product_variants?.find((v) => v.id === selectedVariantId) ?? null
-  // null όταν δεν χρειάζεται μέγεθος καθόλου — ίδιο behavior με πριν.
-  const cartVariantId = requiresSizeSelection ? selectedVariantId : null
-  const needsSizePick = requiresSizeSelection && !selectedVariantId
 
-  // stock_quantity: το ίδιο πεδίο που χρησιμοποιεί ήδη το create_order_from_cart
-  // RPC για το atomic reservation στο checkout. null/undefined (π.χ. προϊόν
-  // χωρίς tracked stock) δεν μπλοκάρει τίποτα — Infinity. ΣΗΜΑΝΤΙΚΟ: το όριο
-  // εδώ είναι του ΕΠΙΛΕΓΜΕΝΟΥ μεγέθους όταν υπάρχει, ΟΧΙ το αθροιστικό
-  // product.stock_quantity — αλλιώς θα επέτρεπε π.χ. 8 Small ενώ υπάρχουν
-  // μόνο 2 Small σε ένα προϊόν με σύνολο 15 σε όλα τα μεγέθη μαζί.
-  const stockForCap = selectedVariant ? selectedVariant.stock_quantity : product.stock_quantity
-  const existingCartQty =
-    cartItems.find(
-      (i) => i.product.id === product.id && (i.variant?.id ?? null) === cartVariantId
-    )?.quantity ?? 0
-  const maxAddable = needsSizePick
-    ? 0
-    : stockForCap != null
-      ? Math.max(0, stockForCap - existingCartQty)
+  // Ανά variant: πόσο ΑΚΟΜΑ χωράει να προστεθεί (stock_quantity ΤΟΥ
+  // ΣΥΓΚΕΚΡΙΜΕΝΟΥ μεγέθους μείον ό,τι ήδη έχει ο fan στο καλάθι για ΑΥΤΟ το
+  // μέγεθος) — ΟΧΙ το αθροιστικό product.stock_quantity, αλλιώς θα
+  // επέτρεπε π.χ. 8 Small ενώ υπάρχουν μόνο 2 Small σε προϊόν με σύνολο 15
+  // σε όλα τα μεγέθη μαζί.
+  const maxByVariant = {}
+  if (hasVariants) {
+    for (const variant of product.product_variants) {
+      const existingCartQty =
+        cartItems.find((i) => i.product.id === product.id && i.variant?.id === variant.id)
+          ?.quantity ?? 0
+      maxByVariant[variant.id] = Math.max(0, variant.stock_quantity - existingCartQty)
+    }
+  }
+
+  const selectedEntries = Object.entries(quantities).filter(([, qty]) => qty > 0)
+  const hasSizeSelection = selectedEntries.length > 0
+
+  // Προϊόντα ΧΩΡΙΣ μεγέθη (music/other, ή clothing χωρίς backfill): ίδιο
+  // παλιό, απλό stepper όπως πριν.
+  const simpleExistingCartQty = !hasVariants
+    ? (cartItems.find((i) => i.product.id === product.id && !i.variant)?.quantity ?? 0)
+    : 0
+  const simpleMaxAddable = !hasVariants
+    ? product.stock_quantity != null
+      ? Math.max(0, product.stock_quantity - simpleExistingCartQty)
       : Infinity
-  const canAddToCart = !needsSizePick && maxAddable > 0
-  // Το stepper δεν μπορεί ποτέ να δείξει/στείλει περισσότερο από maxAddable —
-  // ΑΥΤΟ ήταν το bug (πριν δεν υπήρχε κανένα όριο).
-  const effectiveQuantity = Math.min(quantity, Math.max(1, maxAddable))
-  // Ίδιο mapping με ProductList.jsx — για συνέπεια, όχι νέα κατηγοριοποίηση.
-  const categoryLabel =
-    product.category === "clothing"
-      ? "Ρουχισμός"
-      : product.category === "music"
-        ? "Μουσική"
-        : "Διάφορα"
+    : 0
+  const simpleCanAdd = !hasVariants && simpleMaxAddable > 0
+  const effectiveSimpleQuantity = Math.min(simpleQuantity, Math.max(1, simpleMaxAddable))
+
+  const canAddToCart = hasVariants ? hasSizeSelection : simpleCanAdd
+
+  // 15/9: πλέον από κοινό σημείο αλήθειας (lib/merchCategories.js) — πριν
+  // υπήρχε ξεχωριστό, ασύμφωνο αντίγραφο εδώ ("Μουσική" ενώ η σελίδα
+  // κατηγορίας λέει "CD & Βινύλια" για το ίδιο category, ρητή αναφορά χρήστη).
+  // 15/9: αν υπάρχει "από πού ήρθες" στο router state, χρησιμοποίησε ΑΥΤΟ
+  // (π.χ. "New Arrivals") — αλλιώς fallback στην πραγματική κατηγορία του
+  // προϊόντος (π.χ. "Ρουχισμός"), όπως πριν. Direct/μοιρασμένο link δεν
+  // έχει state, άρα πάντα σωστά πέφτει στο fallback.
+  const categoryLabel = location.state?.fromCategoryLabel ?? getCategoryLabel(product.category)
+  const categoryLinkTo = location.state?.fromCategoryKey
+    ? `/merch/category/${location.state.fromCategoryKey}`
+    : `/merch/category/${product.category}`
   const galleryImages = product.image_urls?.length ? product.image_urls : [null]
 
   // Legacy fallback αντιγραφής (document.execCommand) — χρειάζεται γιατί το
@@ -167,34 +198,88 @@ export default function ProductOverviewRoute() {
     })
   }
 
-  function handleAddToCart() {
+  function handleChangeQuantity(variantId, newQty) {
+    setQuantities((prev) => ({ ...prev, [variantId]: newQty }))
+  }
+
+  // Προσθέτει στο καλάθι ΟΛΑ τα επιλεγμένα μεγέθη/ποσότητες μαζί (ή την
+  // απλή ποσότητα, για προϊόν χωρίς μεγέθη) — μία σειριακή αλυσίδα awaits
+  // (context.onAddToCart είναι πλέον mutateAsync, βλ. useCart.js/Header.jsx),
+  // ΟΧΙ παράλληλα, ώστε το "existing row" matching μέσα στο useCart.addItem
+  // να μη χάσει ενημερώσεις μεταξύ δύο ταυτόχρονων κλήσεων.
+  async function addSelectionsToCart() {
+    if (hasVariants) {
+      for (const [variantId, qty] of selectedEntries) {
+        await context.onAddToCart(product, qty, variantId)
+      }
+      setQuantities({})
+    } else {
+      await context.onAddToCart(product, effectiveSimpleQuantity, null)
+      setSimpleQuantity(1)
+    }
+  }
+
+  async function handleAddToCart() {
     // Δημόσιο URL — δέχεται και αποσυνδεδεμένο επισκέπτη από κοινοποιημένο
     // link, ίδιο μοτίβο με ProductQuickShop.jsx.
     if (!context.isLoggedIn) {
       context.onRequireAuth()
       return
     }
-    if (!canAddToCart) return
-    context.onAddToCart(product, effectiveQuantity, cartVariantId)
-    toast.success("Προστέθηκε στο καλάθι.")
+    if (!canAddToCart || isProcessing) return
+    setIsProcessing(true)
+    try {
+      await addSelectionsToCart()
+      toast.success("Προστέθηκε στο καλάθι.")
+    } catch {
+      toast.error("Κάτι πήγε στραβά με την προσθήκη στο καλάθι. Δοκίμασε ξανά.")
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // 15/9, ρητό αίτημα χρήστη: "Ολοκλήρωση παραγγελίας" δίπλα στο "Προσθήκη
+  // στο καλάθι" — προσθέτει την επιλογή στο καλάθι ΚΑΙ πάει στη σελίδα
+  // ΟΛΟΚΛΗΡΟΥ του καλαθιού (merch/cart, CartRoute.jsx — βάσει reference
+  // component που έδωσε ο χρήστης), ΟΧΙ κατευθείαν σε νέα order· το
+  // πραγματικό checkout (useCreateOrder) γίνεται ΕΚΕΙ, όχι εδώ.
+  async function handleCompleteOrder() {
+    if (!context.isLoggedIn) {
+      context.onRequireAuth()
+      return
+    }
+    if (!canAddToCart || isProcessing) return
+    setIsProcessing(true)
+    try {
+      await addSelectionsToCart()
+      navigate("/merch/cart")
+    } catch {
+      toast.error("Κάτι πήγε στραβά με την προσθήκη στο καλάθι. Δοκίμασε ξανά.")
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   return (
-    <div className="bg-white pt-6 pb-16 sm:pb-24">
-      <nav aria-label="Breadcrumb" className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-        <ol role="list" className="flex items-center gap-2 text-sm text-gray-500">
-          <li>
-            <Link to="/merch" className="hover:text-gray-700">
-              Merch Store
-            </Link>
-          </li>
-          <li aria-hidden="true">/</li>
-          <li className="font-medium text-gray-900">{categoryLabel}</li>
-        </ol>
-      </nav>
+    <>
+      {/* 15/9, ρητό αίτημα χρήστη: το breadcrumb πάει ΕΔΩ πλέον, ΠΡΙΝ από το
+          bg-white div της σελίδας — ίδιο μοτίβο "sibling πριν από το
+          root div" με όλες τις σελίδες merch πλέον (βλ. MerchBreadcrumb.jsx
+          για sticky/κεντράρισμα). Ο "mt-6" wrapper του Outlet (Header.jsx)
+          παραμένει το sticky containing block, τόσο ψηλός όσο ΟΛΗ η σελίδα
+          — καμία αλλαγή στο sticky fix της ίδιας μέρας, απλά το breadcrumb
+          δεν είναι πια εμφωλευμένο μέσα στο δικό της max-w-5xl div. */}
+      <MerchBreadcrumb
+        crumbs={[
+          { label: "Merch Store", to: "/merch" },
+          { label: categoryLabel, to: categoryLinkTo },
+          { label: product.name, to: `/merch/overview/${product.slug}` },
+        ]}
+      />
 
-      <div className="mx-auto mt-6 max-w-5xl px-4 sm:px-6 lg:px-8">
-        <div className="lg:grid lg:grid-cols-2 lg:gap-x-8">
+      <div className="bg-white pt-6 pb-16 sm:pb-24">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <div className="lg:grid lg:grid-cols-2 lg:gap-x-8">
           {/* Gallery — πραγματικές φωτογραφίες του προϊόντος (image_urls),
               όχι placeholder. Η πρώτη πιάνει διπλό πλάτος σε desktop, ίδια
               λογική με το reference design του χρήστη. */}
@@ -222,99 +307,125 @@ export default function ProductOverviewRoute() {
               </p>
             </div>
 
+            {/* 15/9, ρητό αίτημα χρήστη: εδώ (μέσα στη σελίδα προϊόντος) ο
+                ακριβής αριθμός ΠΑΡΑΜΕΝΕΙ — αφαιρέθηκε ΜΟΝΟ από την κάρτα του
+                grid (βλ. ProductList.jsx, showCount={false}). */}
             <StockBadge quantity={getTotalStock(product)} className="mt-3" />
 
             {product.description && (
               <p className="mt-4 text-sm/6 text-gray-600">{product.description}</p>
             )}
 
-            {/* 15/9: πραγματικό stock ανά μέγεθος, χρωματισμένο/disabled — βλ.
-                SizeSelector.jsx (ίδιο component με το ProductQuickShop.jsx modal). */}
+            {/* 15/9: κάθε γραμμή μεγέθους έχει πλέον ΤΗ ΔΙΚΗ ΤΗΣ ποσότητα
+                (βλ. SizeSelector.jsx) — ο fan μπορεί να επιλέξει πολλαπλά
+                μεγέθη μαζί, χωρίς ξεχωριστό "Ποσότητα" section από κάτω. */}
             {product.category === "clothing" && (
               <fieldset aria-label="Επιλογή μεγέθους" className="mt-6">
                 <div className="text-sm font-medium text-gray-900">Μέγεθος</div>
                 <SizeSelector
                   variants={product.product_variants}
-                  selectedVariantId={selectedVariantId}
-                  onSelect={setSelectedVariantId}
+                  quantities={quantities}
+                  maxByVariant={maxByVariant}
+                  onChangeQuantity={handleChangeQuantity}
                 />
+                {hasVariants && !hasSizeSelection && (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Επίλεξε μέγεθος και ποσότητα για να προσθέσεις στο καλάθι.
+                  </p>
+                )}
               </fieldset>
             )}
 
-            <div className="mt-6">
-              <div className="text-sm font-medium text-gray-900">Ποσότητα</div>
-              <div className="mt-2 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  disabled={!canAddToCart}
-                  className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  −
-                </button>
-                <span className="w-6 text-center text-sm font-medium">{effectiveQuantity}</span>
-                <button
-                  type="button"
-                  onClick={() => setQuantity((q) => Math.min(q + 1, maxAddable))}
-                  disabled={effectiveQuantity >= maxAddable}
-                  className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  +
-                </button>
-              </div>
-              {/* Ενημέρωση γιατί κόπηκε το + — όχι απλά σιωπηλό disable. */}
-              {needsSizePick && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Επίλεξε μέγεθος για να δεις τη διαθεσιμότητα.
-                </p>
-              )}
-              {!needsSizePick && Number.isFinite(maxAddable) && existingCartQty > 0 && (
-                <p className="mt-1 text-xs text-gray-500">
-                  {existingCartQty} ήδη στο καλάθι σου — μέγιστο ακόμα {maxAddable}.
-                </p>
-              )}
-              {!needsSizePick && !canAddToCart && stockForCap > 0 && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Έχεις ήδη όλη τη διαθέσιμη ποσότητα στο καλάθι σου.
-                </p>
-              )}
-            </div>
-
-            <div className="mt-6 flex gap-2">
-              <Button
-                type="button"
-                className="flex-1"
-                onClick={handleAddToCart}
-                disabled={!canAddToCart}
-              >
-                Προσθήκη στο καλάθι
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={handleToggleFavorite}
-                aria-label={isFavorited ? "Αφαίρεση από αγαπημένα" : "Προσθήκη στα αγαπημένα"}
-              >
-                {isFavorited ? (
-                  <HeartIconSolid className="size-5 text-red-500" />
-                ) : (
-                  <HeartIcon className="size-5" />
+            {/* Προϊόντα χωρίς μεγέθη (music/other, ή clothing χωρίς backfill
+                ακόμα): παλιό, απλό stepper. */}
+            {!hasVariants && (
+              <div className="mt-6">
+                <div className="text-sm font-medium text-gray-900">Ποσότητα</div>
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSimpleQuantity((q) => Math.max(1, q - 1))}
+                    disabled={!simpleCanAdd}
+                    className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    −
+                  </button>
+                  <span className="w-6 text-center text-sm font-medium">
+                    {effectiveSimpleQuantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSimpleQuantity((q) => Math.min(q + 1, simpleMaxAddable))}
+                    disabled={effectiveSimpleQuantity >= simpleMaxAddable}
+                    className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    +
+                  </button>
+                </div>
+                {!simpleCanAdd && simpleExistingCartQty > 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Έχεις ήδη όλη τη διαθέσιμη ποσότητα στο καλάθι σου.
+                  </p>
                 )}
-              </Button>
+                {simpleCanAdd && simpleExistingCartQty > 0 && Number.isFinite(simpleMaxAddable) && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {simpleExistingCartQty} ήδη στο καλάθι σου — μέγιστο ακόμα {simpleMaxAddable}.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-col gap-2">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  className="flex-1"
+                  onClick={handleAddToCart}
+                  disabled={!canAddToCart || isProcessing}
+                >
+                  Προσθήκη στο καλάθι
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleToggleFavorite}
+                  aria-label={isFavorited ? "Αφαίρεση από αγαπημένα" : "Προσθήκη στα αγαπημένα"}
+                >
+                  {isFavorited ? (
+                    <HeartIconSolid className="size-5 text-red-500" />
+                  ) : (
+                    <HeartIcon className="size-5" />
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={handleShare}
+                  aria-label="Κοινοποίηση συνδέσμου"
+                >
+                  <ShareIcon className="size-5" />
+                </Button>
+              </div>
+              {/* 15/9, ρητό αίτημα χρήστη (screenshot 5): "Ολοκλήρωση
+                  παραγγελίας" δίπλα στην ήδη υπάρχουσα σειρά — προσθέτει την
+                  επιλογή στο καλάθι ΚΑΙ πάει κατευθείαν στη συνολική
+                  παραγγελία. */}
               <Button
                 type="button"
-                variant="outline"
-                size="icon"
-                onClick={handleShare}
-                aria-label="Κοινοποίηση συνδέσμου"
+                variant="secondary"
+                className="w-full"
+                onClick={handleCompleteOrder}
+                disabled={!canAddToCart || isProcessing}
               >
-                <ShareIcon className="size-5" />
+                Ολοκλήρωση παραγγελίας
               </Button>
             </div>
           </div>
         </div>
       </div>
     </div>
+    </>
   )
 }

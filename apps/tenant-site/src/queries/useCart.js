@@ -106,6 +106,22 @@ export function useCart(fanId, tenantId) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart", fanId] }),
   })
 
+  // 15/9, ρητό αίτημα χρήστη: "ή να αφαιρέσει όλο το καλάθι" — bulk delete
+  // ΟΛΩΝ των γραμμών αυτού του fan+tenant, όχι μία-μία (αυτό ήδη καλύπτεται
+  // από removeItem). Ίδιο query scope (fan_id + tenant_id) με το useQuery
+  // παραπάνω, ώστε να μην αγγίξει καλάθι άλλου tenant.
+  const clearCart = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("cart_items")
+        .delete()
+        .eq("fan_id", fanId)
+        .eq("tenant_id", tenantId)
+      if (error) throw error
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["cart", fanId] }),
+  })
+
   const items = (query.data || []).map((row) => ({
     id: row.id,
     product: row.product,
@@ -124,8 +140,20 @@ export function useCart(fanId, tenantId) {
     items,
     itemCount,
     subtotal,
-    addItem: (product, quantity, variantId) => addItem.mutate({ product, quantity, variantId }),
+    // 15/9: για full-page routes (CartRoute.jsx) που θέλουν skeleton state
+    // κατά τη φόρτωση, ίδιο μοτίβο με τα υπόλοιπα routes (ProductOverviewRoute.jsx).
+    isLoading: query.isLoading,
+    // 15/9: mutateAsync (όχι mutate) — έγινε awaitable ώστε ο caller να
+    // μπορεί να προσθέσει σειριακά ΠΟΛΛΑΠΛΑ μεγέθη/ποσότητες του ίδιου
+    // προϊόντος (ένα SizeSelector row ανά μέγεθος) και να ΠΕΡΙΜΕΝΕΙ να
+    // ολοκληρωθούν όλα πριν προχωρήσει σε "Ολοκλήρωση παραγγελίας" — βλ.
+    // ProductOverviewRoute.jsx. Callers που δεν κάνουν await συνεχίζουν να
+    // δουλεύουν ακριβώς όπως πριν (fire-and-forget), το mutateAsync απλά
+    // επιστρέφει ένα Promise που μπορεί να αγνοηθεί.
+    addItem: (product, quantity, variantId) =>
+      addItem.mutateAsync({ product, quantity, variantId }),
     updateQuantity: (cartItemId, delta) => updateQuantity.mutate({ cartItemId, delta }),
     removeItem: (cartItemId) => removeItem.mutate(cartItemId),
+    clearCart: () => clearCart.mutate(),
   }
 }

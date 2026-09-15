@@ -1169,6 +1169,18 @@ console errors.
 
 **Ρητά εκτός scope σήμερα (επόμενο βήμα, όποτε αποφασιστεί):** το ίδιο το Stripe integration — serverless function (Netlify Functions ή Supabase Edge Functions, κανένα scaffold δεν υπάρχει ακόμα) για το PaymentIntent + webhook που κάνει το order `completed`. Επίσης εκτός scope: μια λίστα "όλες οι παραγγελίες μου" στο Fan Dashboard (`FanOrdersRoute.jsx` παραμένει placeholder, δεν συνδέθηκε με τα νέα tables σήμερα — εύκολο follow-up μόλις υπάρχουν πραγματικά completed orders).
 
+**⚠️⚠️ ΚΡΙΣΙΜΟΣ ΚΑΝΟΝΑΣ ΓΙΑ ΟΤΑΝ ΧΤΙΣΤΕΙ ΤΟ STRIPE (Ή ΟΠΟΙΟΔΗΠΟΤΕ ΑΛΛΟ ΣΥΣΤΗΜΑ ΠΛΗΡΩΜΗΣ) — 15/9, ρητό αίτημα χρήστη να αποθηκευτεί εδώ, ρωτούσε τι θα γινόταν αν δύο users παλεύουν για το ίδιο ρούχο ταυτόχρονα:**
+
+Η σειρά ΠΡΕΠΕΙ να είναι πάντα: **πρώτα κλειδώνει/δεσμεύεται το απόθεμα (already built, `create_order_from_cart` → order status `pending`), ΜΕΤΑ ζητάμε τα λεφτά.** ΠΟΤΕ το αντίστροφο — ποτέ χρέωση πριν επιβεβαιωθεί ότι το atomic `UPDATE ... WHERE stock_quantity >= qty` πέτυχε. Αν χτιστεί ανάποδα (π.χ. Stripe PaymentIntent πριν το `create_order_from_cart`, ή χωρίς να ελέγχεται ότι το order είναι ακόμα `pending`/μη ληγμένο πριν το `completed`), υπάρχει σενάριο κάποιος να πληρώσει για κάτι που δεν υπάρχει πια — αυτό είναι το ΝΟΥΜΕΡΟ ΕΝΑ πράγμα που πρέπει να αποφευχθεί.
+
+Συγκεκριμένα σημεία προσοχής όταν χτιστεί το serverless function/webhook:
+- Το **PaymentIntent/checkout session της Stripe να δημιουργείται ΜΟΝΟ για order που ΗΔΗ έχει status `pending`** (δηλαδή το `create_order_from_cart` έχει ήδη τρέξει επιτυχώς και το stock είναι ήδη δεσμευμένο) — ποτέ να μη ζητάμε στοιχεία κάρτας πριν επιβεβαιωθεί η δέσμευση.
+- **Race με τη λήξη του 10λεπτου hold:** αν το webhook επιβεβαίωσης πληρωμής (Stripe → εμάς) καθυστερήσει και έρθει ΑΦΟΥ το `expire_stale_orders` (τρέχει κάθε λεπτό μέσω pg_cron) έχει ήδη επαναφέρει το stock και μαρκάρει το order `expired`, χρειάζεται ρητή λογική reconciliation στο webhook handler: αν το order δεν είναι πια `pending` όταν έρθει η επιβεβαίωση πληρωμής, ΔΕΝ γίνεται απλά `completed` — είτε γίνεται αυτόματο refund + ενημέρωση fan, είτε (αν υπάρχει ακόμα απόθεμα) ξαναδοκιμάζεται η δέσμευση. Να αποφασιστεί ρητά ΠΡΙΝ γραφτεί ο κώδικας, όχι ενδιάμεσα.
+- Το 10λεπτο hold είναι σκόπιμα γενναιόδωρο για ένα κανονικό checkout με κάρτα — δεν χρειάζεται να μεγαλώσει "για σιγουριά", καλύτερα να μείνει μικρό ώστε το απόθεμα να ελευθερώνεται γρήγορα αν κάποιος εγκαταλείψει.
+- Πιθανό μελλοντικό (όχι τώρα, μόνο αν γίνει πρόβλημα στην πράξη): κάποιος κακόβουλος θα μπορούσε επανειλημμένα να γεμίζει καλάθι + να πατάει checkout (δεσμεύοντας stock για 10 λεπτά) χωρίς ποτέ να πληρώνει, "κρατώντας όμηρο" τη διαθεσιμότητα. Λύση αν χρειαστεί: rate limiting σε active pending orders ανά fan — δεν χτίζεται προληπτικά τώρα.
+
+Η υπόλοιπη αλυσίδα (atomic UPDATE στη βάση, whole-transaction rollback αν αποτύχει έστω μία γραμμή, ζωντανό μήνυμα σφάλματος στον χαμένο χρήστη) είναι ΗΔΗ σωστά χτισμένη και δοκιμασμένη — δες `create_order_from_cart`/`expire_stale_orders` στο `20260915120000_add_product_variants.sql` (το `create or replace` version, με per-variant stock) για την ακριβή λογική.
+
 **Για την επόμενη φορά, με προτεραιότητα:**
 1. Ο χρήστης τρέχει το migration `20260914150000_add_orders_checkout.sql` στο Supabase (μετά από ενεργοποίηση pg_cron extension).
 2. Ζωντανό browser test ολόκληρου του flow (βλ. παραπάνω).
@@ -1383,6 +1395,395 @@ row μέσω browser console, επιβεβαίωσα με `elementFromPoint` ό�
 sm:-mt-14">` έγινε `<div className="relative -mt-12 flex items-end gap-4
 sm:-mt-14">`. Μονή αλλαγή, καμία άλλη επίπτωση. `npx eslint .`
 επιβεβαιώθηκε αμετάβλητο baseline (19/1).
+
+## 🛍️ Merch UX: κάρτα-clickable, badge χωρίς αριθμό, multi-size cart, "Ολοκλήρωση παραγγελίας" από τη σελίδα προϊόντος (15/9)
+
+Ρητό, πολυμερές αίτημα χρήστη (6 screenshots) μετά το stock-ανά-μέγεθος
+του προηγούμενου batch:
+
+1. **Ολόκληρη η κάρτα προϊόντος στο grid είναι πλέον clickable**, όχι μόνο
+   η φωτογραφία (`ProductList.jsx`) — `<Card>` πήρε `role="button"`,
+   `tabIndex`, `onClick`/`onKeyDown` → `/merch/overview/:slug`. Η καρδιά
+   (αγαπημένα) και το "Γρήγορη αγορά" κουμπί μέσα στην κάρτα κάνουν
+   `stopPropagation` ώστε να μη διπλο-navigate-άρουν.
+2. **Η κάρτα του grid δεν δείχνει πια τον ακριβή αριθμό διαθεσιμότητας** —
+   μόνο το tier text (π.χ. "Διαθέσιμα"), χωρίς το "(N)". Ο ακριβής αριθμός
+   παραμένει ΜΟΝΟ μέσα στη σελίδα προϊόντος (και ανά μέγεθος στο
+   SizeSelector). Υλοποιήθηκε με νέο `showCount` prop στο `StockBadge.jsx`
+   (default `true`, `ProductList.jsx` περνάει ρητά `false`) + νέο
+   `shortLabel` πεδίο ανά tier στο `stockTiers.js`.
+3. **`SizeSelector.jsx` ξανασχεδιασμένο από "διάλεξε ΕΝΑ μέγεθος" σε
+   "ποσότητα ανά μέγεθος, πολλά μαζί"** — κάθε πραγματικό
+   `product_variants` row είναι πλέον η δική του γραμμή: [χρωματισμένο pill
+   μεγέθους] (διαθέσιμος αριθμός σε παρένθεση) [δικός του − ποσότητα +
+   stepper]. Ο fan μπορεί να βάλει π.χ. 2 Small ΚΑΙ 1 Medium στο ίδιο
+   visit, το ένα "Προσθήκη στο καλάθι" προσθέτει ΟΛΑ τα επιλεγμένα μαζί
+   (σειριακά awaited, βλ. παρακάτω). Νέο API:
+   `{ variants, quantities, maxByVariant, onChangeQuantity }` — αντικατέστησε
+   πλήρως το παλιό `{ variants, selectedVariantId, onSelect }`, ενημερώθηκαν
+   και τα δύο consumers (`ProductOverviewRoute.jsx`, `ProductQuickShop.jsx`).
+4. **`useCart.js`: το `addItem` έγινε awaitable** (`mutateAsync` αντί για
+   `mutate`) — αναγκαίο ώστε πολλαπλές προσθήκες μεγεθών να γίνονται
+   ΣΕΙΡΙΑΚΑ (await μία-μία), όχι παράλληλα· αλλιώς δύο ταυτόχρονες κλήσεις
+   θα μπορούσαν να χάσουν η μία το "existing row" matching της άλλης.
+   `Header.jsx`'s `handleAddToCart` έγινε `async`/`await` για τον ίδιο λόγο.
+   Callers που δεν κάνουν await (fire-and-forget) συνεχίζουν να δουλεύουν
+   κανονικά.
+5. **Νέο κουμπί "Ολοκλήρωση παραγγελίας" στη σελίδα προϊόντος**
+   (`ProductOverviewRoute.jsx`, κάτω από τη σειρά
+   Προσθήκη/αγαπημένα/κοινοποίηση) — προσθέτει την τρέχουσα επιλογή στο
+   καλάθι ΚΑΙ πάει κατευθείαν στη συνολική παραγγελία.
+   **⚠️ Σημαντική παραδοχή, να επιβεβαιωθεί με τον χρήστη:** αυτό
+   ΕΠΑΝΑΧΡΗΣΙΜΟΠΟΙΕΙ το ήδη υπάρχον `useCreateOrder` → `/merch/order/:orderId`
+   (`OrderSummaryRoute.jsx`) flow — το ΙΔΙΟ που ήδη κάνει το "Ολοκλήρωση
+   παραγγελίας" του `CartDialog.jsx`. Ο χρήστης είχε πει "θα σου δώσω τον
+   κώδικα όταν τον φτιάξω" για το component προορισμού· μέχρι να δοθεί
+   διαφορετικός κώδικας, χρησιμοποιείται το υπάρχον, λειτουργικό flow. Το
+   μήνυμα σφάλματος checkout (`insufficient_stock`/`empty_cart`) εξήχθη σε
+   κοινό `lib/checkoutErrors.js` (χρησιμοποιείται από `CartDialog.jsx` ΚΑΙ
+   το νέο κουμπί εδώ, ένα σημείο αλήθειας).
+6. **`CartDialog.jsx`**: επιβεβαιώθηκε ότι ήδη έδειχνε κάθε επιλογή
+   ξεχωριστά (μία γραμμή ανά `cart_items` row, δικό της +/−/κάδος) — καμία
+   αλλαγή χρειάστηκε εκεί. Προστέθηκε ΝΕΟ "Άδειασμα καλαθιού" (πάνω δεξιά
+   στο dialog header, με `window.confirm`) για bulk-clear ολόκληρου του
+   καλαθιού μονομιάς — νέο `clearCart` mutation στο `useCart.js`
+   (bulk `delete` στα `cart_items` του fan+tenant).
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο baseline (19 errors/1 warning, όλα
+σε shadcn-generated `ui/` αρχεία, εκτός scope).
+
+## 🐞 Bug fix: 409 Conflict στο καλάθι όταν προστίθεται 2ο μέγεθος του ίδιου προϊόντος (15/9)
+
+Ρητή αναφορά χρήστη, live στο `http://strafi.concerto.gr:5173/merch/overview/t-shirt-roosters`:
+`POST .../rest/v1/cart_items 409 (Conflict)`.
+
+**Διάγνωση, ζωντανά αναπαραγμένη** (Claude in Chrome, στο ήδη συνδεδεμένο
+tab του χρήστη): το καλάθι είχε ήδη 1 γραμμή (T-Shirt Roosters, Small,
+qty 10/10 — γεμάτο). Δοκίμασα να προσθέσω 1 τεμάχιο Medium (ΔΙΑΦΟΡΕΤΙΚΟ
+μέγεθος, καθόλου σχετικό με το ήδη γεμάτο Small) — ίδιο 409, αναπαράχθηκε
+αμέσως. `response.clone().text()` μέσω injected `fetch` patch επιβεβαίωσε
+unique-constraint violation στο insert.
+
+**Ρίζα**: το `cart_items` δημιουργήθηκε στο Supabase dashboard ΠΡΙΝ
+υπάρξει το `variant_id` (βλ. σχόλιο στο
+`20260908130000_add_tenant_scoping_favorites_cart.sql`) — είχε από τότε
+ένα UNIQUE constraint σε κάτι σαν `(fan_id, product_id[, tenant_id])`,
+λογικό τότε (μία γραμμή ανά προϊόν). Το migration
+`20260915120000_add_product_variants.sql` πρόσθεσε τη ΣΤΗΛΗ `variant_id`
+αλλά δεν άγγιξε το παλιό constraint — άρα ΔΕΥΤΕΡΗ γραμμή για το ΙΔΙΟ
+προϊόν (ακόμα και με διαφορετικό μέγεθος) συνέχιζε να μπλοκάρεται σε
+επίπεδο βάσης, ΑΝΕΞΑΡΤΗΤΑ από το ότι το app-level "existing" matching
+στο `useCart.js` σωστά δεν έβρισκε ήδη υπάρχουσα γραμμή για το Medium.
+
+**Fix**: νέο migration
+`supabase/migrations/20260915160000_fix_cart_items_unique_per_variant.sql`
+— αφαιρεί ΔΥΝΑΜΙΚΑ (δεν ήταν γνωστό το ακριβές όνομα, δημιουργήθηκε εκτός
+migrations) οποιοδήποτε unique constraint/index στο `cart_items` με
+`product_id` αλλά ΧΩΡΙΣ `variant_id`, και το αντικαθιστά με
+`unique (fan_id, tenant_id, product_id, variant_id)` — επιτρέπει πλέον
+πολλαπλές γραμμές του ίδιου προϊόντος (μία ανά μέγεθος), διατηρώντας την
+προστασία από ΔΙΠΛΕΣ γραμμές του ΙΔΙΟΥ ακριβώς συνδυασμού.
+
+**⚠️ Χρειάζεται να τρέξει ο χρήστης το migration στο Supabase SQL editor**
+(ίδιο workflow με πάντα) — μέχρι τότε, η προσθήκη 2ου μεγέθους του ίδιου
+προϊόντος στο καλάθι θα συνεχίσει να σκάει με 409.
+
+## 🛒 CartRoute.jsx: πλήρης σελίδα καλαθιού + checkout (15/9)
+
+Ο χρήστης έδωσε δικό του reference component (Tailwind UI "Shopping Cart"
+page, fake δεδομένα) ζητώντας να χτιστεί με βάση αυτό το "άλλο component
+που θα έχει τη συνολική παραγγελία" που ανέφερε νωρίτερα το ίδιο βράδυ.
+
+**Όνομα:** πρότεινα `CartRoute.jsx` (αντί για το αρχικό
+`productshoppingcartordersummary` που πρότεινε ο χρήστης) — ταιριάζει με
+τη σύμβαση ονομασίας του project για πραγματικές σελίδες
+(`OrderSummaryRoute.jsx`, `ProductOverviewRoute.jsx`), σύντομο, ένα
+πράγμα δηλώνει (η σελίδα ΚΑΛΑΘΙΟΥ).
+
+**Route**: `merch/cart` — flat sibling, ίδιο μοτίβο με `merch/order/:orderId`
+(`main.jsx`).
+
+**Προσαρμογές πάνω στο reference του χρήστη** (βάσει της ήδη υπάρχουσας
+λογικής του project — ρητά ζητήθηκε "αφαίρεσε με βάση τη λογική που σου
+έχω δώσει"):
+- Fake `products` array → πραγματικά δεδομένα μέσω `useCart(fanId, tenantId)`
+  (ίδιο hook με το `CartDialog.jsx`). Προστέθηκε `isLoading` στο
+  `useCart.js` return (νέο, μικρό) για skeleton state σε αυτή τη
+  full-page έκδοση.
+- `<select>` dropdown ποσότητας (1-8, χωρίς όριο) → το ήδη υπάρχον
+  −/ποσότητα/+ stepper, κομμένο στο πραγματικό stock ανά variant/προϊόν
+  (`updateQuantity`, ίδιο με `CartDialog.jsx`).
+- "Shipping estimate" / "Tax estimate" **αφαιρέθηκαν εντελώς** — δεν
+  υπάρχει shipping ή φόρος μοντελοποιημένος πουθενά στο project, θα ήταν
+  fake νούμερα χωρίς αντίκρισμα. Έμεινε μόνο "Σύνολο" = subtotal.
+- "In stock / Ships in X weeks" → το ήδη υπάρχον μήνυμα ορίου ("Έχεις ήδη
+  όλη τη διαθέσιμη ποσότητα (Ν)"), ίδιο με `CartDialog.jsx`.
+- Πρόσθεσα states που δεν υπήρχαν στο reference: άδειο καλάθι (με link
+  "Συνέχεια αγορών"), μη συνδεδεμένος επισκέπτης (prompt σύνδεσης), και
+  "Άδειασμα καλαθιού" (ίδιο bulk-clear που προστέθηκε νωρίτερα σήμερα στο
+  `CartDialog.jsx`).
+- Το "Checkout" submit καλεί το ΗΔΗ υπάρχον `useCreateOrder` RPC και πάει
+  σε `/merch/order/:orderId` (10λεπτο hold + countdown, `OrderSummaryRoute.jsx`)
+  — καμία επανάληψη της λογικής δέσμευσης stock, μόνο νέο UI γύρω της.
+
+**Άλλαξε και το `ProductOverviewRoute.jsx`**: το "Ολοκλήρωση παραγγελίας"
+πλέον προσθέτει την επιλογή στο καλάθι και πάει σε `/merch/cart` (δείχνει
+ΟΛΟΚΛΗΡΟ το καλάθι, όχι μόνο το τρέχον προϊόν) αντί να δημιουργεί
+κατευθείαν order — ήταν η αρχική, προσωρινή παραδοχή μου (flagαρίστηκε
+ρητά στον χρήστη τότε), τώρα διορθώθηκε με το πραγματικό flow που ήθελε.
+
+**Ζωντανά επιβεβαιωμένο** (Claude in Chrome, `/merch/cart`): πραγματικό
+item από το καλάθι (T-Shirt Roosters, Small), stepper σωστά κλειδωμένο
+στο 10/10, σωστό σύνολο (200.00€). ΔΕΝ πατήθηκε "Ολοκλήρωση παραγγελίας"
+στο live test (θα δέσμευε πραγματικό stock/δημιουργούσε πραγματική
+παραγγελία).
+
+**⚠️ Σημείωση προς τον χρήστη, εκκρεμεί απόφαση:** το εικονίδιο καλαθιού
+στο header (`TenantTopBar.jsx`) συνεχίζει να ανοίγει το μικρό
+`CartDialog.jsx` — δεν το άγγιξα, δεν ζητήθηκε. Τώρα υπάρχουν δύο τρόποι
+να δει/επεξεργαστεί κανείς το καλάθι (dialog + `/merch/cart`). Αν ο
+χρήστης θέλει το εικονίδιο να στέλνει στο `/merch/cart` αντί να ανοίγει
+το dialog, είναι μικρή αλλαγή.
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο baseline (19/1).
+
+## 🔀 Το εικονίδιο καλαθιού πηγαίνει πλέον στο /merch/cart, όχι στο CartDialog popup (15/9)
+
+Ρητή απόφαση αφημένη σε μένα από τον χρήστη ("κάνε αυτό που πιστεύεις
+εσύ ότι είναι καλύτερο"). Απόφαση: `TenantTopBar.jsx` — το κουμπί
+καλαθιού πλέον κάνει `navigate("/merch/cart")` αντί για
+`setCartOpen(true)`. Λόγοι: (α) το `CartRoute.jsx` (φτιάχτηκε νωρίτερα
+σήμερα) είναι ήδη ένα strict superset του `CartDialog.jsx` — ίδιο
+edit/remove/clear, ΣΥΝ loading skeleton, unauthenticated state, breadcrumb
+— διπλή συντήρηση της ίδιας λογικής σε δύο σημεία δεν έχει νόημα· (β) το
+checkout ήδη μεταφέρει σε πλήρη σελίδα (`OrderSummaryRoute`), άρα το
+"προϊόν → καλάθι → παραγγελία" μένει συνεπές ως αλυσίδα πλήρων σελίδων,
+όχι popup→σελίδα στη μέση.
+
+**Το `CartDialog.jsx` ΔΕΝ διαγράφηκε** — έμεινε στον φάκελο, απλά δεν
+εισάγεται/χρησιμοποιείται πια πουθενά (αφαιρέθηκε το import + το
+`cartOpen` state + το render από το `TenantTopBar.jsx`). Αν ο χρήστης
+προτιμήσει τελικά το popup, είναι μονόλεπτη επαναφορά.
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1) — κανένα unused-import
+σφάλμα από την αφαίρεση.
+
+**Ζωντανά επιβεβαιωμένο** (Claude in Chrome): κλικ στο εικονίδιο →
+`/merch/cart`. Bonus επιβεβαίωση στο ίδιο live test: το προηγούμενο
+pending order (10× Small, από νωρίτερα σήμερα) είχε λήξει το 10λεπτο
+κράτημά του και το `expire_stale_orders` cron το είχε ήδη επαναφέρει
+σωστά — Small ξαναδείχνει 10/10, "Διαθέσιμα (17)" σωστό συνολικά. Άρα η
+απάντηση στην ερώτηση του χρήστη "θα κολλήσει το stock;" είναι όχι, το
+αυτόματο restore δουλεύει σωστά.
+
+## 🐞 Bug fix: breadcrumb κατηγορίας μη-clickable + ασύμφωνα ονόματα κατηγορίας σε 3 σημεία (15/9)
+
+Ρητή αναφορά χρήστη: στη σελίδα προϊόντος (`ProductOverviewRoute.jsx`),
+το breadcrumb "Merch Store / Ρουχισμός" — το "Merch Store" ήταν
+πραγματικό link, αλλά το "Ρουχισμός" ήταν απλό κείμενο, χωρίς σύντομο
+δρόμο πίσω στη λίστα της κατηγορίας (`/merch/category/clothing`).
+
+Στο ψάξιμο βρέθηκε και δεύτερο, σχετικό πρόβλημα: το "όνομα κατηγορίας"
+υπήρχε ξεχωριστά, ελαφρώς ασύμφωνα, σε **3 σημεία** — `useMerchCategories.js`
+έλεγε "CD & Βινύλια" για τη μουσική, ενώ `ProductList.jsx` και
+`ProductOverviewRoute.jsx` έλεγαν "Μουσική" για το ΙΔΙΟ category.
+
+**Fix:** νέο `lib/merchCategories.js` — ένα σημείο αλήθειας
+(`CATEGORY_LABELS` + `getCategoryLabel()`), ίδιο μοτίβο με
+`stockTiers.js`/`checkoutErrors.js`. Και τα 3 σημεία εισάγουν πλέον από
+εκεί. Το breadcrumb στο `ProductOverviewRoute.jsx` έγινε πραγματικό
+`<Link to={\`/merch/category/${'{'}product.category{'}'}\`}>`.
+
+**Ζωντανά επιβεβαιωμένο** (Claude in Chrome): κλικ στο "Ρουχισμός" στο
+breadcrumb → πάει σωστά στο `/merch/category/clothing`, δείχνει τη
+σωστή λίστα.
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1).
+
+## 🍞 Ενιαίο breadcrumb σε ΟΛΟ το merch flow — νέο MerchBreadcrumb.jsx (15/9)
+
+Ρητή αναφορά χρήστη, με screenshots: το `/merch` (λίστα κατηγοριών) και
+το `/merch/category/:key` δεν είχαν ΚΑΘΟΛΟΥ breadcrumb ("Merch Store /"),
+ενώ το `ProductOverviewRoute.jsx`/`CartRoute.jsx` (φτιάχτηκαν νωρίτερα
+σήμερα) είχαν το δικό τους, ξεχωριστό αντίγραφο.
+
+**Νέο `components/Merch/MerchBreadcrumb.jsx`** — κοινό component,
+δέχεται `crumbs=[{label, to}, ...]`. **Κάθε crumb είναι πραγματικό
+`<Link>`, ΑΚΟΜΑ και το τελευταίο/τρέχον** — ρητό αίτημα χρήστη: στο ίδιο
+το `/merch`, το "Merch Store" πρέπει να δείχνει "είσαι εδώ" ΚΑΙ να είναι
+clickable (σαν refresh), όχι plain text όπως θα έκανε ένα πιο τυπικό
+breadcrumb. Το ίδιο μοτίβο κρατήθηκε παντού, για συνέπεια.
+
+Ενσωματώθηκε σε **5 σελίδες**:
+- `CategoryGrid.jsx` (`/merch`) — ΝΕΟ, δεν υπήρχε καθόλου: `["Merch Store"]`.
+- `MerchCategoryRoute.jsx` (`/merch/category/:key`) — ΝΕΟ, αντικατέστησε
+  το παλιό "← Πίσω στις κατηγορίες" link (η ίδια δουλειά γίνεται ήδη από
+  την πρώτη γραμμή του breadcrumb): `["Merch Store", category.title]`.
+- `ProductOverviewRoute.jsx` — refactor στο κοινό component (ίδιο
+  αποτέλεσμα με πριν, απλά ΧΩΡΙΣ διπλό κώδικα).
+- `CartRoute.jsx` — refactor· το "Καλάθι" έγινε κι αυτό clickable
+  (self-link), πριν ήταν plain text.
+- `OrderSummaryRoute.jsx` — ΝΕΟ, δεν υπήρχε καθόλου: `["Merch Store", "Παραγγελία"]`.
+
+**Ζωντανά επιβεβαιωμένο** (Claude in Chrome), ολόκληρη η αλυσίδα:
+`/merch` ("Merch Store") → New Arrivals ("Merch Store / New Arrivals") →
+προϊόν ("Merch Store / Ρουχισμός" — η ΠΡΑΓΜΑΤΙΚΗ κατηγορία του προϊόντος,
+όχι "New Arrivals", σωστό) → καλάθι ("Merch Store / Καλάθι").
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1).
+
+## 🍞 Breadcrumb: διατήρηση της "διαδρομής" πλοήγησης (15/9)
+
+Ρητή διόρθωση χρήστη πάνω στο προηγούμενο: "Ρουχισμός, σωστό" ΔΕΝ ήταν
+σωστό από τη σκοπιά του χρήστη — αν κάποιος μπει από "New Arrivals" και
+πατήσει πάνω σε ένα προϊόν, το breadcrumb της σελίδας προϊόντος έπρεπε να
+συνεχίσει να δείχνει "Merch Store / New Arrivals" (τη διαδρομή που
+ΠΡΑΓΜΑΤΙΚΑ ακολούθησε ο χρήστης), όχι να ξαναϋπολογίζει σιωπηλά την
+πραγματική/στατική κατηγορία του προϊόντος ("Ρουχισμός").
+
+**Λύση**: React Router `navigate(path, {state})`.
+- `ProductList.jsx` δέχεται νέα προαιρετικά props `categoryKey`/
+  `categoryLabel`· το `handleCardClick` περνάει
+  `state: { fromCategoryKey, fromCategoryLabel }` όταν υπάρχουν.
+- `MerchCategoryRoute.jsx` (μοναδικός caller σήμερα) περνάει
+  `categoryKey={category.key}` / `categoryLabel={category.title}`.
+- `ProductOverviewRoute.jsx` διαβάζει `useLocation().state` και το
+  breadcrumb crumb γίνεται:
+  `location.state?.fromCategoryLabel ?? getCategoryLabel(product.category)`
+  (αντίστοιχα για το link). **Fallback στην πραγματική κατηγορία** όταν
+  δεν υπάρχει `state` — δηλαδή σε direct/shared link (χωρίς προηγούμενη
+  πλοήγηση μέσα στην εφαρμογή) εξακολουθεί να δείχνει σωστά την
+  πραγματική κατηγορία, όπως πρέπει.
+
+**Ζωντανά επιβεβαιωμένο** (Claude in Chrome), δύο σενάρια:
+1. `/merch` → New Arrivals → κλικ στο T-Shirt Roosters → breadcrumb
+   "Merch Store / New Arrivals" (διατηρήθηκε η διαδρομή).
+2. Direct navigation στο `/merch/overview/t-shirt-roosters` (χωρίς
+   προηγούμενο κλικ) → breadcrumb "Merch Store / Ρουχισμός" (σωστό
+   fallback στην πραγματική κατηγορία).
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1).
+
+**Άμεση συνέχεια, ίδια μέρα**: ο χρήστης παρατήρησε ότι έλειπε το ΤΡΙΤΟ
+crumb (το ίδιο το προϊόν) — το breadcrumb σταματούσε στην κατηγορία.
+Προστέθηκε τρίτο crumb στο `ProductOverviewRoute.jsx`:
+`{ label: product.name, to: `/merch/overview/${product.slug}` }`
+(self-link, ίδιο μοτίβο "είσαι εδώ" με τα υπόλοιπα crumbs). Τελικό
+αποτέλεσμα: "Merch Store / New Arrivals / T-Shirt Roosters". Επίσης
+επιβεβαιώθηκε (ήδη δούλευε σωστά, ο χρήστης ρώτησε για σιγουριά) ότι το
+κλικ πάνω στο "New Arrivals" crumb οδηγεί σωστά σε `/merch/category/new`
+— όλα τα προϊόντα της κατηγορίας, όχι κάπου αλλού.
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1).
+
+## 🍞 Breadcrumb → sticky "pill" με backdrop-blur (15/9)
+
+Ρητό αίτημα χρήστη (screenshot ενός στρογγυλού "board" από icons ως οπτικό
+παράδειγμα σχήματος): το breadcrumb να γίνει ένα στρογγυλό "board" που:
+1. **Μεγαλώνει** σε πλάτος καθώς αυξάνεται η διαδρομή (περισσότερα crumbs).
+2. Μπαίνει **κάτω από τη γραμμή** των tabs (Πληροφορίες/Εκδηλώσεις/Merch
+   Store, βλ. `border-b` στο `Header.jsx`) — η φυσική του θέση, μιας και
+   είναι το πρώτο πράγμα σε κάθε merch-σελίδα.
+3. Είναι **sticky**: μένει στο ίδιο ύψος καθώς ο χρήστης σκρολάρει
+   ψάχνοντας προϊόντα, αντί να φεύγει μαζί με το περιεχόμενο.
+4. Έχει **backdrop-blur**: ό,τι περνάει από πίσω του (κάρτες/φωτογραφίες
+   προϊόντων) φαίνεται θολό, όχι κρυμμένο.
+
+Όλη η λογική μπήκε **μέσα στο ίδιο το `MerchBreadcrumb.jsx`**
+(`sticky top-0 z-20 w-fit py-3` στο `<nav>`, `rounded-full bg-white/80
+backdrop-blur-md ring-1 ring-gray-900/5 shadow-sm` στο `<ol>` μέσα) — ένα
+σημείο αλήθειας, όχι bespoke styling σε κάθε σελίδα. Το "μεγαλώνει καθώς
+αυξάνεται η διαδρομή" είναι ΔΩΡΕΑΝ (`w-fit`, όχι σταθερό πλάτος) — όσο πιο
+πολλά crumbs, τόσο πλατύτερο το pill, καμία ειδική λογική.
+
+Οι 5 σελίδες που το χρησιμοποιούν αφαίρεσαν το δικό τους `<nav
+className="mb-4/mb-6">` wrapper γύρω από το `<MerchBreadcrumb>` (το
+component φέρνει πλέον το δικό του `<nav>`/spacing).
+
+**🐞 Bug βρέθηκε & διορθώθηκε ζωντανά, ίδια δουλειά**: στο
+`ProductOverviewRoute.jsx` το sticky ΔΕΝ δούλευε καθόλου — το breadcrumb
+έφευγε κανονικά μαζί με το scroll αντί να κολλάει. Αιτία: το είχα βάλει
+σε ΔΙΚΟ ΤΟΥ, ξεχωριστό `<div>` (μόνο για οριζόντια ευθυγράμμιση), που
+περιείχε ΜΟΝΟ το breadcrumb — άρα το div αυτό ήταν τόσο ψηλό όσο το ίδιο
+το breadcrumb. Ένα sticky στοιχείο δεν μπορεί να μείνει κολλημένο πέρα
+από τα όρια του ΔΙΚΟΥ ΤΟΥ γονικού container — μόλις σκρόλαρες λίγο, το
+div "τελείωνε" και το breadcrumb ξεκολλούσε μαζί του. Οι άλλες 4 σελίδες
+δεν είχαν αυτό το πρόβλημα επειδή το breadcrumb ήταν ήδη μέσα στο ΙΔΙΟ,
+ψηλό container με το υπόλοιπο περιεχόμενο (λίστα προϊόντων/καλάθι/κλπ).
+**Fix**: ενοποιήθηκαν τα δύο `<div>` σε ένα — το breadcrumb είναι πλέον
+πρώτο παιδί μέσα στο ΙΔΙΟ container με το gallery/λεπτομέρειες προϊόντος.
+
+**Ζωντανά επιβεβαιωμένο** (Claude in Chrome), scroll test σε 3 σελίδες
+(`/merch/category/new`, `/merch/overview/t-shirt-roosters`,
+`/merch/cart`): το pill μένει κολλημένο στην κορυφή, με το περιεχόμενο
+(φωτογραφίες/κάρτες) να περνάει θολό από πίσω του.
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1).
+
+**Άμεση συνέχεια, ίδια μέρα — κεντράρισμα + θέση**: δύο ρητά αιτήματα
+χρήστη πάνω στο pill:
+1. Να είναι **κεντραρισμένο** οριζόντια, και καθώς μεγαλώνει η διαδρομή
+   (περισσότερα crumbs) να μεγαλώνει **συμμετρικά γύρω από το κέντρο**
+   (όχι μόνο προς τα δεξιά).
+2. Να αλλάξει **θέση**: να μπει στον λευκό χώρο ΠΑΝΩ από το γκρι φόντο
+   (`bg-gray-50`) των κατηγοριών/λίστας προϊόντων, ΚΑΤΩ από τη γραμμή των
+   tabs — όχι μέσα στο ίδιο το γκρι, όπως ήταν πριν.
+
+**Κεντράρισμα** (`MerchBreadcrumb.jsx`): το `<nav>` έγινε
+`flex justify-center` (πλήρες πλάτος) αντί για `w-fit` (block, αριστερά
+στοιχισμένο) — το ίδιο το pill (`<ol>`) μένει `w-fit` μέσα του, οπότε το
+`justify-center` το κεντράρει αυτόματα σε κάθε αλλαγή πλάτους, καμία άλλη
+λογική.
+
+**Θέση**: σε ΟΛΕΣ τις 5 σελίδες merch, το `<MerchBreadcrumb>` μετακόμισε
+από "πρώτο παιδί μέσα στο χρωματιστό root div της σελίδας" σε "sibling
+ΠΡΙΝ από το root div" (React Fragment `<>...</>`) — ίδιο μοτίβο παντού,
+ένα σημείο αλήθειας:
+- `MerchCategoriesRoute.jsx` (`/merch`): breadcrumb πριν από το
+  `bg-gray-50` div (αφαιρέθηκε από το `CategoryGrid.jsx` — μετακόμισε ένα
+  επίπεδο πιο πάνω).
+- `MerchCategoryRoute.jsx` (`/merch/category/:key`): ίδιο, πριν από το
+  `bg-gray-50`.
+- `ProductOverviewRoute.jsx`, `CartRoute.jsx`, `OrderSummaryRoute.jsx`:
+  ίδιο μοτίβο (sibling πριν από το root `bg-white`/plain div) για
+  συνέπεια, παρόλο που εκεί δεν υπήρχε ορατό γκρι/λευκό διαχωριστικό —
+  μπόνους: ο sticky "containing block" είναι πλέον ο κοινός `mt-6` wrapper
+  του Outlet (`Header.jsx`, ψηλός όσο ΟΛΗ η σελίδα σε κάθε περίπτωση),
+  πιο robust από πριν.
+
+**Ζωντανά επιβεβαιωμένο** (Claude in Chrome): `/merch` (1 crumb,
+κεντραρισμένο, πάνω από το γκρι) → `/merch/category/new` (2 crumbs,
+κεντραρισμένο, sticky+blur στο scroll) → `/merch/overview/t-shirt-roosters`
+(3 crumbs, πλατύτερο pill αλλά ακόμα κεντραρισμένο, sticky επιβεβαιωμένο
+μετά την αναδιάρθρωση) → `/merch/cart` (2 crumbs, κεντραρισμένο).
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1).
+
+**Άμεση συνέχεια, ίδια μέρα — bug σε κινητό**: ο χρήστης βρήκε (screenshot)
+ότι με 3 crumbs σε στενή οθόνη κινητού το pill έσπαγε σε 2η γραμμή
+(`flex-wrap`) — ρητό αίτημα: "δεν θέλω να αλλάζει γραμμή", με πρόταση
+μικρότερης γραμματοσειράς σε κινητό.
+
+**Fix, `MerchBreadcrumb.jsx`** (3 αλλαγές μαζί, όχι μόνο η γραμματοσειρά,
+ώστε να ΜΗΝ ξανασπάσει ούτε σε ακραία περίπτωση — πολύ στενή οθόνη/πολύ
+μεγάλο όνομα προϊόντος):
+1. Αφαιρέθηκε το `flex-wrap` (αυτό έσπαγε σε 2η γραμμή).
+2. Μικρότερη γραμματοσειρά/padding/gap σε κινητό: `text-xs` (αντί
+   `text-sm`), `sm:text-sm` από tablet και πάνω· αντίστοιχα μικρότερα
+   `px`/`py`/`gap`.
+3. **Ασφαλιστική δικλείδα**: `overflow-x-auto` + `whitespace-nowrap` +
+   κρυμμένη scrollbar (`[scrollbar-width:none] [&::-webkit-scrollbar]:hidden`)
+   πάνω στο ίδιο το pill — αν παρ' όλα αυτά η διαδρομή είναι πολύ πλατιά
+   για την οθόνη, σκρολάρει οριζόντια ΜΕΣΑ στον εαυτό της αντί να σπάσει
+   σε 2η γραμμή ή να ξεχειλίσει έξω από τη σελίδα.
+
+**Ζωντανά επιβεβαιωμένο** (Claude in Chrome, viewport 414px, ακριβώς το
+σενάριο του screenshot — "New Arrivals" → "T-Shirt ΣΤΡΑΦΙ Μαύρο", 3
+crumbs): μία γραμμή (ύψος pill 28px), πλάτος pill 334px < 414px viewport,
+`document.documentElement.scrollWidth` (399px) < viewport — καμία
+οριζόντια υπερχείλιση σελίδας.
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1).
 
 ## Οδηγία προς AI assistant (Claude ή άλλο)
 

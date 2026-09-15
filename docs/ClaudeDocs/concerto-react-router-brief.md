@@ -955,6 +955,31 @@ Icon-ordering: C (brand/home) → Προφίλ → Αγαπημένα → Καλ
 
 ---
 
+## Merch checkout flow — νέα flat routes + breadcrumb navigation state (15/9)
+
+Ενημέρωση μετά από αρκετό καιρό χωρίς entry εδώ (το ενδιάμεσο merch/Fan-Dashboard work καταγράφηκε κυρίως στο κύριο `concerto-brief.md`) — η λίστα "Routes που υπάρχουν" παραπάνω έμεινε ιστορικό στιγμιότυπο της αρχικής Merch Store υλοποίησης. Ο πλήρης, ενημερωμένος πίνακας routes ΣΗΜΕΡΑ (`main.jsx`):
+
+```
+/about                                        → InfoRoute (tenant home)
+/merch                                        → MerchCategoriesRoute (CategoryGrid)
+  /merch/product/:productId                   → ProductModalRoute (modal πάνω στο CategoryGrid)
+/merch/category/:categoryKey                  → MerchCategoryRoute (λίστα προϊόντων)
+  /merch/category/:categoryKey/product/:productId → ProductModalRoute (modal πάνω στη λίστα)
+/merch/order/:orderId                         → OrderSummaryRoute (flat sibling — σελίδα παραγγελίας/checkout)
+/merch/cart                                   → CartRoute (flat sibling, ΝΕΟ σήμερα — σελίδα καλαθιού)
+/merch/overview/:productId                    → ProductOverviewRoute (flat sibling — μοιράσιμη σελίδα προϊόντος)
+/events, /events/event/:eventId, /events/event/:eventId/info, /events/event/new, /events/event/:eventId/edit
+/account/profile, /account/tenants, /account/merch, /account/events, /account/orders, /account/cart
+```
+
+`merch/order/:orderId` και `merch/overview/:productId` ήταν ήδη routes από νωρίτερη δουλειά (δεν καταγράφηκαν ποτέ σε αυτό το αρχείο)· το `merch/cart` είναι το μόνο πραγματικά ΝΕΟ route σήμερα. Και τα τρία ακολουθούν το ίδιο "flat sibling" μοτίβο (αντικαθιστούν εντελώς τη λίστα/κατηγορία αντί να κάθονται πάνω της ως modal) — ίδια λογική με τα ήδη τεκμηριωμένα `events/event/new` κ.λπ.
+
+**Νέο pattern σήμερα: React Router `state` για "από πού ήρθες".** Ο χρήστης ζήτησε το breadcrumb στη σελίδα προϊόντος να δείχνει τη ΔΙΑΔΡΟΜΗ που ακολούθησε ο χρήστης (π.χ. "New Arrivals"), όχι πάντα την πραγματική/στατική κατηγορία του προϊόντος. Λύση: `navigate(path, { state: { fromCategoryKey, fromCategoryLabel } })` από το `ProductList.jsx`, διαβάζεται με `useLocation().state` στο `ProductOverviewRoute.jsx`, με fallback στην πραγματική κατηγορία όταν δεν υπάρχει `state` (direct/μοιρασμένο link). Καθαρό client-side `state` (μέρος του History API entry) — όχι query param, άρα δεν "διαρρέει" σε μοιρασμένα links.
+
+**Δομική αλλαγή στα route components (breadcrumb sticky/pill, βλ. κύριο brief):** και τα 5 merch route components (`MerchCategoriesRoute.jsx`, `MerchCategoryRoute.jsx`, `ProductOverviewRoute.jsx`, `CartRoute.jsx`, `OrderSummaryRoute.jsx`) επιστρέφουν πλέον `<>{breadcrumb}{rootDiv}</>` (React Fragment) αντί για ένα μόνο root div — το breadcrumb είναι sibling ΠΡΙΝ από το χρωματιστό/root div της σελίδας, όχι πια εμφωλευμένο μέσα του. Λόγος: το `position: sticky` του breadcrumb χρειάζεται ψηλό "containing block" (βλ. bug-fix στο κύριο brief) — ο κοινός `mt-6` wrapper του `<Outlet />` στο `Header.jsx` είναι πλέον αυτό το containing block σε ΟΛΕΣ τις σελίδες, ενιαία.
+
+`npx eslint .` καθαρό (19 errors/1 warning, ίδιο preexisting baseline).
+
 ## Οδηγία προς AI assistant (Claude ή άλλο)
 
 > Αυτό είναι το επίσημο, ζωντανό log του React Router task. Ενημέρωσέ το σε κάθε βήμα (τι έγινε, τι αποφασίστηκε, τι εκκρεμεί) — μην αφήνεις να "χαθεί" η σειρά μέσα στο κύριο brief. Ακολούθα αυστηρά τους κανόνες εργασίας στην κορυφή αυτού του εγγράφου.

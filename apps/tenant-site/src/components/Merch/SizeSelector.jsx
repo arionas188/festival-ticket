@@ -1,16 +1,18 @@
 import { cn } from "@/lib/utils"
 import { getStockTier } from "../../lib/stockTiers"
 
-// 15/9, ρητό αίτημα χρήστη: αντικαθιστά τα παλιά, αμιγώς διακοσμητικά
-// PLACEHOLDER_SIZES κουμπιά (ProductQuickShop.jsx/ProductOverviewRoute.jsx
-// τα είχαν ΔΙΠΛΑ αντιγραμμένα, καμία σύνδεση με πραγματικό stock). Ένα
-// component, χρησιμοποιείται και στα δύο σημεία — "να μην κάνουμε extra
-// γραμμές κώδικα" (ρητό αίτημα χρήστη, 14/9). Κάθε κουμπί = ένα πραγματικό
-// product_variants row, χρωματισμένο με το ΙΔΙΟ tier/χρώμα με το StockBadge
-// (getStockTier — ένα σημείο αλήθειας), disabled στο κόκκινο (0 τεμάχια).
+// 15/9, ρητό αίτημα χρήστη: ξανασχεδιασμένο από "διάλεξε ΕΝΑ μέγεθος" σε
+// "διάλεξε ποσότητα ανά μέγεθος, πολλά μεγέθη ταυτόχρονα" — πιο κατανοητό
+// (ο χρήστης το είπε ρητά) και λύνει και ένα πραγματικό use-case: 2 Small
+// + 3 Medium σε ΜΙΑ κίνηση "Προσθήκη", αντί να ξαναανοίγεις το dropdown.
+// Κάθε γραμμή = ένα πραγματικό product_variants row: [μέγεθος pill]
+// (διαθέσιμος αριθμός) [− ποσότητα +]. Το pill παραμένει χρωματισμένο με
+// το ΙΔΙΟ tier/χρώμα με το StockBadge (getStockTier — ένα σημείο αλήθειας),
+// αλλά δεν είναι πια clickable το ίδιο — η επιλογή γίνεται μέσω του δικού
+// του stepper (πρώτο "+" = επιλογή αυτού του μεγέθους).
 const SIZE_ORDER = ["S", "M", "L", "XL"]
 
-export default function SizeSelector({ variants, selectedVariantId, onSelect }) {
+export default function SizeSelector({ variants, quantities, maxByVariant, onChangeQuantity }) {
   // Δεν επινοούμε μεγέθη — αν το προϊόν δεν έχει ακόμα καμία γραμμή
   // product_variants στη βάση (π.χ. παλιό προϊόν πριν το backfill), το
   // λέμε ρητά αντί να δείξουμε 4 fake κουμπιά.
@@ -27,27 +29,52 @@ export default function SizeSelector({ variants, selectedVariantId, onSelect }) 
   )
 
   return (
-    <div className="mt-2 grid grid-cols-4 gap-2">
+    <div className="mt-2 flex flex-col gap-1.5">
       {sorted.map((variant) => {
         const tier = getStockTier(variant.stock_quantity)
-        const isSelected = variant.id === selectedVariantId
-        const isDisabled = variant.stock_quantity <= 0
+        const isOutOfStock = variant.stock_quantity <= 0
+        const qty = quantities[variant.id] ?? 0
+        const max = maxByVariant[variant.id] ?? 0
         return (
-          <button
-            key={variant.id}
-            type="button"
-            disabled={isDisabled}
-            onClick={() => onSelect(variant.id)}
-            title={tier.label(variant.stock_quantity)}
-            className={cn(
-              "flex items-center justify-center rounded-md p-2 text-sm font-medium transition-colors",
-              tier.className,
-              isSelected && "outline outline-2 outline-offset-1 outline-gray-900",
-              isDisabled && "cursor-not-allowed opacity-50 line-through"
-            )}
-          >
-            {variant.size}
-          </button>
+          <div key={variant.id} className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span
+                title={tier.label(variant.stock_quantity)}
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-md text-sm font-medium transition-colors",
+                  tier.className,
+                  qty > 0 && "outline outline-2 outline-offset-1 outline-gray-900",
+                  isOutOfStock && "line-through opacity-50"
+                )}
+              >
+                {variant.size}
+              </span>
+              {/* Ρητό αίτημα χρήστη: ο διαθέσιμος αριθμός δίπλα στο μέγεθος,
+                  σε παρένθεση, ώστε να φαίνεται αμέσως χωρίς να χρειάζεται
+                  hover/tooltip. */}
+              <span className="text-xs text-gray-500">({variant.stock_quantity})</span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onChangeQuantity(variant.id, Math.max(0, qty - 1))}
+                disabled={qty <= 0}
+                className="flex size-7 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                −
+              </button>
+              <span className="w-5 text-center text-sm font-medium">{qty}</span>
+              <button
+                type="button"
+                onClick={() => onChangeQuantity(variant.id, Math.min(qty + 1, max))}
+                disabled={qty >= max}
+                className="flex size-7 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                +
+              </button>
+            </div>
+          </div>
         )
       })}
     </div>
