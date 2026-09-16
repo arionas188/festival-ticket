@@ -49,30 +49,52 @@ import { Link } from "react-router-dom"
 //    οριζόντια ΜΕΣΑ στον εαυτό του (κρυμμένη scrollbar) αντί να σπάσει σε
 //    2η γραμμή ή να ξεχειλίσει έξω από την οθόνη.
 //
+// 16/9, πέμπτο ρητό αίτημα χρήστη — μικρή "ιστορία" αυτού του `action`
+// prop, πήγε-ήρθε αρκετές φορές αυθημερόν: αρχικά ΜΕΣΑ στο nav (absolute
+// δεξιά, ίδια γραμμή με το pill)· μετά `position: fixed` (κέντρο ύψους
+// οθόνης, αριστερά)· μετά ΞΑΝΑ ίδια γραμμή με το pill· ΤΕΛΙΚΑ (νέα
+// screenshots) ο χρήστης εξήγησε γιατί η "ίδια γραμμή" δεν δούλευε καλά:
+// όταν το pill μεγαλώνει (περισσότερα/μεγαλύτερα crumbs), μπορεί να
+// σκεπάσει/σπρώξει το κουμπί. Λύση: ΔΕΥΤΕΡΗ, ΞΕΧΩΡΙΣΤΗ γραμμή ΚΑΤΩ από το
+// pill, τέρμα αριστερά με μικρό κενό από την άκρη της οθόνης — έτσι το
+// πλάτος του pill (που αλλάζει) δεν μπορεί ΠΟΤΕ να επηρεάσει τη θέση του
+// κουμπιού, είναι εντελώς ανεξάρτητα οριζόντια.
+//
+// Οι δύο γραμμές (pill + κουμπί) μένουν ΜΕΣΑ στο ΙΔΙΟ sticky container
+// (εδώ το εξωτερικό `<div>`, όχι πια το `<nav>`) — ΟΧΙ δύο ξεχωριστά sticky
+// στοιχεία το ένα κάτω από το άλλο, που θα αλληλοεπικαλύπτονταν καθώς
+// κολλάνε (ίδιο σκεπτικό με το αρχικό fix του κουμπιού φίλτρων).
+//
 // props: crumbs = [{ label, to }, ...], τουλάχιστον ένα ("Merch Store").
-export default function MerchBreadcrumb({ crumbs }) {
+//        action (προαιρετικό) = ReactNode, π.χ. <ProductFilters .../>,
+//        ρεντεράρεται σε δική του γραμμή, τέρμα αριστερά.
+export default function MerchBreadcrumb({ crumbs, action }) {
   return (
-    <nav aria-label="Breadcrumb" className="sticky top-0 z-20 flex justify-center py-3">
-      <ol
-        role="list"
-        className="flex w-fit max-w-full items-center gap-1.5 overflow-x-auto rounded-full bg-white/80 px-3 py-1.5 text-xs whitespace-nowrap text-gray-500 shadow-sm ring-1 ring-gray-900/5 backdrop-blur-md [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-2 sm:px-4 sm:py-2 sm:text-sm [&::-webkit-scrollbar]:hidden"
-      >
-        {crumbs.map((crumb, i) => (
-          <li key={crumb.to} className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-            {i > 0 && <span aria-hidden="true">/</span>}
-            <Link
-              to={crumb.to}
-              className={
-                i === crumbs.length - 1
-                  ? "font-medium text-gray-900 hover:text-gray-700"
-                  : "hover:text-gray-700"
-              }
-            >
-              {crumb.label}
-            </Link>
-          </li>
-        ))}
-      </ol>
-    </nav>
+    <div className="sticky top-0 z-20 py-3">
+      <nav aria-label="Breadcrumb" className="flex justify-center">
+        <ol
+          role="list"
+          className="flex w-fit max-w-full items-center gap-1.5 overflow-x-auto rounded-full bg-white/50 px-3 py-1.5 text-xs whitespace-nowrap text-gray-600 shadow-lg ring-1 ring-white/40 backdrop-blur-xl [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-2 sm:px-4 sm:py-2 sm:text-sm [&::-webkit-scrollbar]:hidden"
+        >
+          {crumbs.map((crumb, i) => (
+            <li key={crumb.to} className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              {i > 0 && <span aria-hidden="true">/</span>}
+              <Link
+                to={crumb.to}
+                className={
+                  i === crumbs.length - 1
+                    ? "font-medium text-gray-900 hover:text-gray-700"
+                    : "hover:text-gray-700"
+                }
+              >
+                {crumb.label}
+              </Link>
+            </li>
+          ))}
+        </ol>
+      </nav>
+
+      {action && <div className="mt-2 flex justify-start pl-1 sm:pl-2">{action}</div>}
+    </div>
   )
 }

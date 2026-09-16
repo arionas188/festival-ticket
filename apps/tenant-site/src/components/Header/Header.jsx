@@ -154,7 +154,9 @@ export default function Header({ tenant, settings, onRequireAuth }) {
                     type="button"
                     onClick={handleFollowClick}
                     disabled={unfollowTenant.isPending}
-                    className="inline-flex shrink-0 items-center rounded-full bg-green-50 px-3 py-1.5 text-sm font-semibold text-green-700 ring-1 ring-inset ring-green-600/20 hover:bg-red-50 hover:text-red-700 hover:ring-red-600/20"
+                    // 16/9, ρητό αίτημα χρήστη — μικρότερο κουμπί (ήταν
+                    // px-3 py-1.5 text-sm, ίδιο μέγεθος με το "Ακολούθησε").
+                    className="inline-flex shrink-0 items-center rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 ring-1 ring-inset ring-green-600/20 hover:bg-red-50 hover:text-red-700 hover:ring-red-600/20"
                   >
                     Ακολουθείς
                   </button>

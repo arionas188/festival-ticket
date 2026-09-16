@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import StockBadge from "./StockBadge"
 import { getTotalStock } from "../../lib/stockTiers"
 import { getCategoryLabel } from "../../lib/merchCategories"
+import { shareLink } from "../../lib/shareLink"
 import MerchBreadcrumb from "./MerchBreadcrumb"
 import SizeSelector from "./SizeSelector"
 import { useProducts } from "../../queries/useProducts"
@@ -137,52 +138,11 @@ export default function ProductOverviewRoute() {
     : `/merch/category/${product.category}`
   const galleryImages = product.image_urls?.length ? product.image_urls : [null]
 
-  // Legacy fallback αντιγραφής (document.execCommand) — χρειάζεται γιατί το
-  // navigator.clipboard υπάρχει ΜΟΝΟ σε "secure context" (https, ή localhost).
-  // Σε plain http (π.χ. τοπικό dev server πάνω σε http://<subdomain>:5173)
-  // το navigator.clipboard είναι undefined και ΣΚΑΕΙ αν το καλέσουμε απευθείας
-  // — αυτό ήταν το bug. execCommand είναι deprecated αλλά δουλεύει παντού,
-  // ό,τι πρωτόκολλο κι αν έχει η σελίδα.
-  function legacyCopy(text) {
-    const textarea = document.createElement("textarea")
-    textarea.value = text
-    textarea.style.position = "fixed"
-    textarea.style.opacity = "0"
-    document.body.appendChild(textarea)
-    textarea.focus()
-    textarea.select()
-    let ok
-    try {
-      ok = document.execCommand("copy")
-    } catch {
-      ok = false
-    }
-    document.body.removeChild(textarea)
-    return ok
-  }
-
+  // 16/9: η λογική κοινοποίησης μετακόμισε στο κοινό lib/shareLink.js
+  // (χρησιμοποιείται πλέον ΚΑΙ από τις κάρτες προϊόντων στο ProductList.jsx)
+  // — εδώ μένει μόνο το URL της τρέχουσας σελίδας.
   function handleShare() {
-    const url = window.location.href
-
-    if (typeof navigator.share === "function") {
-      // Ο χρήστης μπορεί να ακυρώσει το native share sheet — δεν είναι σφάλμα.
-      navigator.share({ title: product.name, url }).catch(() => {})
-      return
-    }
-
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard
-        .writeText(url)
-        .then(() => toast.success("Ο σύνδεσμος αντιγράφηκε."))
-        .catch(() => toast.error("Δεν ήταν δυνατή η αντιγραφή του συνδέσμου."))
-      return
-    }
-
-    if (legacyCopy(url)) {
-      toast.success("Ο σύνδεσμος αντιγράφηκε.")
-    } else {
-      toast.error("Δεν ήταν δυνατή η αντιγραφή του συνδέσμου.")
-    }
+    shareLink({ url: window.location.href, title: product.name })
   }
 
   function handleToggleFavorite() {
