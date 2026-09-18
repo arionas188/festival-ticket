@@ -78,6 +78,16 @@ function useVisualViewportMaxHeight() {
   return maxHeight
 }
 
+// 18/9 fix (ρητή αναφορά χρήστη, screenshot bug): το X κλεισίματος ήταν
+// absolute ΜΕΣΑ στο ίδιο το scroll container (το DialogPrimitive.Content
+// είχε "overflow-y-auto" απευθείας πάνω του) — σε ψηλό περιεχόμενο που
+// χρειάζεται scroll, το X "έφευγε" προς τα πάνω μαζί με το scroll αντί να
+// μένει σταθερό πάνω-δεξιά. Fix: το scroll μετακόμισε σε ΕΣΩΤΕΡΙΚΟ wrapper
+// div (flex-1/min-h-0, το καθιερωμένο pattern για "flex parent με max-height
+// + scrollable child"), το ίδιο το Content έγινε ένα σταθερό, μη-scrollable
+// "πλαίσιο" (overflow-hidden) — το X, ως sibling του wrapper (όχι μέσα
+// του), μένει πάντα στην ίδια θέση όσο κι αν scroll-άρει το περιεχόμενο.
+// Αφορά ΟΛΑ τα dialogs του project (κοινό component), όχι μόνο ένα.
 function DialogContent({
   className,
   children,
@@ -92,13 +102,15 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-4 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[calc(100vh-2rem)] -translate-x-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:top-1/2 sm:max-h-[85vh] sm:-translate-y-1/2 sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed top-4 left-1/2 z-50 flex max-h-[calc(100vh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl bg-popover text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:top-1/2 sm:max-h-[85vh] sm:-translate-y-1/2 sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         style={keyboardMaxHeight != null ? { ...style, maxHeight: `${keyboardMaxHeight}px` } : style}
         {...props}
       >
-        {children}
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-4">
+          {children}
+        </div>
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button

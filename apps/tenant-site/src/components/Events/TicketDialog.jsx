@@ -1,3 +1,4 @@
+import { ShareIcon } from "@heroicons/react/24/outline"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { useTickets } from "../../queries/useTickets"
 import { Skeleton } from "@/components/ui/skeleton"
+import { shareLink } from "../../lib/shareLink"
 
 function getAvailabilityStatus(ticket) {
   const remaining = ticket.quantity - (ticket.quantity_sold || 0)
@@ -43,11 +45,33 @@ export default function TicketDialog({ event, open, onOpenChange, isLoggedIn, on
     // TODO: κράτηση εισιτηρίου — μελλοντικό task (Checkout/reservation flow)
   }
 
+  // 18/9, ρητό αίτημα χρήστη — ίδιο shareLink() helper με το Merch. Το
+  // /events/event/:eventId ήταν ήδη πραγματικό, μοιράσιμο route πριν από
+  // αυτό το κουμπί (βλ. σχόλιο στο EventModalRoute.jsx), οπότε δεν
+  // χρειάστηκε καμία αλλαγή δομής/routing.
+  function handleShare() {
+    shareLink({
+      url: `${window.location.origin}/events/event/${event.slug}`,
+      title: event.title,
+    })
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="absolute top-2 right-10"
+          onClick={handleShare}
+          aria-label="Κοινοποίηση συνδέσμου"
+        >
+          <ShareIcon className="size-4" />
+        </Button>
+
         <DialogHeader>
-          <DialogTitle>{event?.title}</DialogTitle>
+          <DialogTitle className="pr-16">{event?.title}</DialogTitle>
           <DialogDescription>Επίλεξε τύπο εισιτηρίου</DialogDescription>
         </DialogHeader>
 

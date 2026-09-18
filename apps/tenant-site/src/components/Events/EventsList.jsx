@@ -1,8 +1,9 @@
 import { InformationCircleIcon, MapPinIcon, PencilIcon, TicketIcon } from '@heroicons/react/20/solid'
-import { HeartIcon } from '@heroicons/react/24/outline'
+import { HeartIcon, ShareIcon } from '@heroicons/react/24/outline'
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid'
 import { Link } from 'react-router-dom'
 import { getMapsUrl } from '../../lib/maps'
+import { shareLink } from '../../lib/shareLink'
 import { useEventFavorites, useToggleEventFavorite } from '../../queries/useEventFavorites'
 import DeleteEventDialog from './DeleteEventDialog'
 
@@ -100,6 +101,20 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, i
     toggleEventFavorite.mutate({ eventId: event.id, isFavorited, event })
   }
 
+  // 18/9, ρητό αίτημα χρήστη — το /events/event/:eventId ΕΙΝΑΙ ήδη
+  // πραγματικό, μοιράσιμο route (βλ. EventModalRoute.jsx, δέχεται slug
+  // ή UUID ακριβώς για κοινοποιημένα links) — καμία αλλαγή δομής δεν
+  // χρειάστηκε, μόνο το ίδιο shareLink() helper που ήδη χρησιμοποιεί το
+  // Merch (ProductList.jsx/ProductOverviewRoute.jsx).
+  function handleShare(e, event) {
+    e.preventDefault()
+    e.stopPropagation()
+    shareLink({
+      url: `${window.location.origin}/events/event/${event.slug}`,
+      title: event.title,
+    })
+  }
+
   return (
     <ul role="list" className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {events.map((event) => {
@@ -110,39 +125,60 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, i
         return (
           <li
             key={event.id}
-            className="col-span-1 divide-y divide-gray-200 rounded-lg bg-white shadow-md overflow-hidden"
+            // 18/9, ρητό αίτημα χρήστη — ίδιο ύφος με τις κάρτες
+            // κατηγορίας/προϊόντος στο Merch (CategoryGrid.jsx/
+            // ProductList.jsx): rounded-xl + shadow-2xl + λεπτό ring, αντί
+            // για το παλιό rounded-lg/shadow-md.
+            className="col-span-1 divide-y divide-gray-200 rounded-xl bg-white shadow-2xl ring-1 ring-foreground/10 overflow-hidden"
           >
             {event.image_url && (
-              <div className="relative">
-                <img
-                  src={event.image_url}
-                  alt={event.title}
-                  className="h-40 w-full object-cover"
-                />
-                {isAdmin && (
-                  <div className="absolute top-2 left-2 flex items-center gap-1.5">
-                    <Link
-                      to={`event/${event.slug}/edit`}
-                      title="Επεξεργασία event"
-                      aria-label="Επεξεργασία event"
-                      className="flex size-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-                    >
-                      <PencilIcon aria-hidden="true" className="size-4" />
-                    </Link>
-                    <DeleteEventDialog event={event} tenantId={tenantId} />
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={(e) => handleToggleFavorite(e, event)}
-                  className="absolute top-2 right-2 rounded-full bg-white/80 p-1.5 backdrop-blur-sm hover:bg-white"
-                >
-                  {isFavorited ? (
-                    <HeartIconSolid className="size-5 text-red-500" />
-                  ) : (
-                    <HeartIcon className="size-5 text-gray-700" />
+              // 18/9: η εικόνα παίρνει δικό της λευκό περιθώριο (p-4) +
+              // rounded-md — ίδιο μοτίβο με το CardContent/rounded-md του
+              // CategoryGrid.jsx, ώστε να φαίνεται καθαρό λευκό πλαίσιο
+              // γύρω από την εικόνα αντί να την γεμίζει ως την άκρη της
+              // κάρτας.
+              <div className="p-4 pb-0">
+                <div className="relative overflow-hidden rounded-md">
+                  <img
+                    src={event.image_url}
+                    alt={event.title}
+                    className="h-40 w-full object-cover"
+                  />
+                  {isAdmin && (
+                    <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                      <Link
+                        to={`event/${event.slug}/edit`}
+                        title="Επεξεργασία event"
+                        aria-label="Επεξεργασία event"
+                        className="flex size-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+                      >
+                        <PencilIcon aria-hidden="true" className="size-4" />
+                      </Link>
+                      <DeleteEventDialog event={event} tenantId={tenantId} />
+                    </div>
                   )}
-                </button>
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => handleShare(e, event)}
+                      aria-label="Κοινοποίηση συνδέσμου"
+                      className="rounded-full bg-white/80 p-1.5 backdrop-blur-sm hover:bg-white"
+                    >
+                      <ShareIcon className="size-5 text-gray-700" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleToggleFavorite(e, event)}
+                      className="rounded-full bg-white/80 p-1.5 backdrop-blur-sm hover:bg-white"
+                    >
+                      {isFavorited ? (
+                        <HeartIconSolid className="size-5 text-red-500" />
+                      ) : (
+                        <HeartIcon className="size-5 text-gray-700" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -190,7 +226,7 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, i
                 <div className="flex min-w-0 flex-1">
                   {availability === 'sold_out' || availability === 'free' ? (
                     <span
-                      className="relative -mr-px inline-flex w-full cursor-not-allowed items-center justify-center gap-x-2 rounded-bl-lg border border-transparent py-4 text-sm font-semibold text-gray-400"
+                      className="relative -mr-px inline-flex w-full cursor-not-allowed items-center justify-center gap-x-2 rounded-bl-xl border border-transparent py-4 text-sm font-semibold text-gray-400"
                       aria-disabled="true"
                     >
                       <TicketIcon aria-hidden="true" className="size-5 text-gray-300" />
@@ -207,7 +243,7 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, i
                   ) : (
                     <Link
                       to={`event/${event.slug}`}
-                      className="relative -mr-px inline-flex w-full items-center justify-center gap-x-3 rounded-bl-lg border border-transparent py-4 text-sm font-semibold text-gray-900"
+                      className="relative -mr-px inline-flex w-full items-center justify-center gap-x-3 rounded-bl-xl border border-transparent py-4 text-sm font-semibold text-gray-900"
                     >
                       <TicketIcon aria-hidden="true" className="size-5 text-gray-400" />
                       Ticket
@@ -228,7 +264,7 @@ export default function EventsList({ events, fanId, isLoggedIn, onRequireAuth, i
                 <div className="-ml-px flex min-w-0 flex-1">
                   <Link
                     to={`event/${event.slug}/info`}
-                    className="relative inline-flex w-full items-center justify-center gap-x-3 rounded-br-lg border border-transparent py-4 text-sm font-semibold text-gray-900"
+                    className="relative inline-flex w-full items-center justify-center gap-x-3 rounded-br-xl border border-transparent py-4 text-sm font-semibold text-gray-900"
                   >
                     <InformationCircleIcon aria-hidden="true" className="size-5 text-gray-400" />
                     Info

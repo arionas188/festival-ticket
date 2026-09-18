@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useCart } from "../../queries/useCart"
 import { useCreateOrder } from "../../queries/useCreateOrder"
 import { checkoutErrorMessage } from "../../lib/checkoutErrors"
+import { getOrderTotals } from "../../lib/pricing"
 import MerchBreadcrumb from "./MerchBreadcrumb"
 
 // 15/9, ρητό αίτημα χρήστη ("άλλο component που θα έχει τη συνολική
@@ -45,6 +46,10 @@ export default function CartRoute() {
   )
   const createOrder = useCreateOrder(fanId, tenantId)
   const [checkoutError, setCheckoutError] = useState(null)
+  // 18/9, ρητό αίτημα χρήστη: η "Σύνοψη παραγγελίας" δείχνει πλέον
+  // καθαρή αξία + ΦΠΑ 24% + έξοδα αποστολής (3€) ξεχωριστά, αντί για ένα
+  // μονολιθικό "Σύνολο" — βλ. lib/pricing.js για την ακριβή λογική/γιατί.
+  const { net, vat, shipping, grandTotal } = getOrderTotals(subtotal)
 
   function handleCheckout(e) {
     e.preventDefault()
@@ -223,8 +228,20 @@ export default function CartRoute() {
 
               <dl className="mt-6 space-y-4">
                 <div className="flex items-center justify-between border-t border-gray-200 pt-4 first:border-t-0 first:pt-0">
-                  <dt className="text-base font-medium text-gray-900">Σύνολο</dt>
-                  <dd className="text-base font-medium text-gray-900">{subtotal.toFixed(2)}€</dd>
+                  <dt className="text-sm text-gray-600">Καθαρή αξία</dt>
+                  <dd className="text-sm font-medium text-gray-900">{net.toFixed(2)}€</dd>
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+                  <dt className="text-sm text-gray-600">ΦΠΑ 24%</dt>
+                  <dd className="text-sm font-medium text-gray-900">{vat.toFixed(2)}€</dd>
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+                  <dt className="text-sm text-gray-600">Έξοδα αποστολής</dt>
+                  <dd className="text-sm font-medium text-gray-900">{shipping.toFixed(2)}€</dd>
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+                  <dt className="text-base font-medium text-gray-900">Τελικό σύνολο</dt>
+                  <dd className="text-base font-medium text-gray-900">{grandTotal.toFixed(2)}€</dd>
                 </div>
               </dl>
 

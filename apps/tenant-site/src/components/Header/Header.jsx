@@ -104,10 +104,14 @@ export default function Header({ tenant, settings, onRequireAuth }) {
   return (
     <div className="min-h-screen bg-white">
       <div className="relative">
+        {/* 18/9, ρητό αίτημα χρήστη: λίγο ψηλότερο cover (ήταν h-32/sm:h-64)
+            — και το ConcertoBar's λογότυπο/avatar επιπλέουν πλέον πάνω σε
+            αυτό (βλ. ConcertoBar.jsx), οπότε χρειαζόταν λίγο παραπάνω
+            χώρο. */}
         <img
           alt=""
           src={tenantCover}
-          className="h-32 w-full rounded-b-2xl object-cover object-[50%_35%] sm:h-64 sm:w-2/3 sm:mx-auto"
+          className="h-40 w-full rounded-b-2xl object-cover object-[50%_35%] sm:h-72 sm:w-2/3 sm:mx-auto"
         />
         {isAdmin && <EditCoverImageDialog tenantId={tenant?.id} currentUrl={settings?.cover_image_url} />}
       </div>
