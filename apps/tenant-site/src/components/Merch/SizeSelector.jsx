@@ -12,7 +12,18 @@ import { getStockTier } from "../../lib/stockTiers"
 // του stepper (πρώτο "+" = επιλογή αυτού του μεγέθους).
 const SIZE_ORDER = ["S", "M", "L", "XL"]
 
-export default function SizeSelector({ variants, quantities, maxByVariant, onChangeQuantity }) {
+// 19/9, ρητό αίτημα χρήστη: προαιρετικό heldVariantIds (Set, βλ.
+// useActiveStockHolds.js) — variant.id μέσα σε αυτό το Set σημαίνει "το
+// μηδέν του εξηγείται από ενεργό hold", άρα "Μη διαθέσιμο" αντί για
+// "Εξαντλημένο" (βλ. lib/stockTiers.js). Default άδειο Set — καμία αλλαγή
+// συμπεριφοράς σε caller που δεν το περνάει.
+export default function SizeSelector({
+  variants,
+  quantities,
+  maxByVariant,
+  onChangeQuantity,
+  heldVariantIds = new Set(),
+}) {
   // Δεν επινοούμε μεγέθη — αν το προϊόν δεν έχει ακόμα καμία γραμμή
   // product_variants στη βάση (π.χ. παλιό προϊόν πριν το backfill), το
   // λέμε ρητά αντί να δείξουμε 4 fake κουμπιά.
@@ -31,7 +42,7 @@ export default function SizeSelector({ variants, quantities, maxByVariant, onCha
   return (
     <div className="mt-2 flex flex-col gap-1.5">
       {sorted.map((variant) => {
-        const tier = getStockTier(variant.stock_quantity)
+        const tier = getStockTier(variant.stock_quantity, heldVariantIds.has(variant.id))
         const isOutOfStock = variant.stock_quantity <= 0
         const qty = quantities[variant.id] ?? 0
         const max = maxByVariant[variant.id] ?? 0

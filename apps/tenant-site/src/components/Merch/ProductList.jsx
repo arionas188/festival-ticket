@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
+import { useActiveStockHolds } from "../../queries/useActiveStockHolds"
 import StockBadge from "./StockBadge"
 import { getCategoryLabel } from "../../lib/merchCategories"
 import { getTotalStock } from "../../lib/stockTiers"
@@ -21,6 +22,9 @@ export default function ProductList({
   const navigate = useNavigate()
   const { data: favoriteIds = [] } = useFavorites(fanId, tenantId)
   const toggleFavorite = useToggleFavorite(fanId)
+  // 19/9, ρητό αίτημα χρήστη: "Μη διαθέσιμο" (ενεργό hold, προσωρινό) αντί
+  // για "Εξαντλημένο" (πραγματικό/μόνιμο μηδέν) — βλ. lib/stockTiers.js.
+  const { heldProductIds } = useActiveStockHolds(tenantId)
 
   function handleToggleFavorite(e, productId) {
     e.stopPropagation()
@@ -138,7 +142,12 @@ export default function ProductList({
                 </p>
               </div>
 
-              <StockBadge quantity={getTotalStock(product)} className="mt-2" showCount={false} />
+              <StockBadge
+                quantity={getTotalStock(product)}
+                className="mt-2"
+                showCount={false}
+                hasActiveHold={heldProductIds.has(product.id)}
+              />
 
               {/* stopPropagation: το κλικ εδώ πρέπει να πάει ΜΟΝΟ στο
                   "Γρήγορη αγορά" modal, όχι ΚΑΙ στο onClick της κάρτας

@@ -1,8 +1,17 @@
 import { useState } from "react"
 import { Link, useNavigate, useOutletContext } from "react-router-dom"
+import { cn } from "@/lib/utils"
 import { TrashIcon } from "@heroicons/react/24/outline"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { useCart } from "../../queries/useCart"
 import { useCreateOrder } from "../../queries/useCreateOrder"
 import { checkoutErrorMessage } from "../../lib/checkoutErrors"
@@ -46,10 +55,21 @@ export default function CartRoute() {
   )
   const createOrder = useCreateOrder(fanId, tenantId)
   const [checkoutError, setCheckoutError] = useState(null)
-  // 18/9, ρητό αίτημα χρήστη: η "Σύνοψη παραγγελίας" δείχνει πλέον
-  // καθαρή αξία + ΦΠΑ 24% + έξοδα αποστολής (3€) ξεχωριστά, αντί για ένα
-  // μονολιθικό "Σύνολο" — βλ. lib/pricing.js για την ακριβή λογική/γιατί.
-  const { net, vat, shipping, grandTotal } = getOrderTotals(subtotal)
+  // 19/9, ρητό αίτημα χρήστη: αντί για native window.confirm, πραγματικό
+  // themed modal (ίδια Dialog primitives με το CartDialog.jsx) — ρωτάει
+  // ρητά πριν διαγράψει ΟΛΟ το καλάθι, καταστροφική/μη αναστρέψιμη ενέργεια.
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+  // 18/9, ρητό αίτημα χρήστη: η "Σύνοψη παραγγελίας" δείχνει καθαρή αξία
+  // + ΦΠΑ 24% ξεχωριστά, αντί για ένα μονολιθικό "Σύνολο" — βλ.
+  // lib/pricing.js για την ακριβή λογική/γιατί. 19/9, ρητό αίτημα χρήστη:
+  // η αρχική έκδοση πρόσθετε ΚΑΙ 3€ έξοδα αποστολής εδώ, αλλά αφαιρέθηκε —
+  // "να μην μπερδευτούμε, θέλω ο fan να βλέπει το κανονικό ποσό, αυτό που
+  // βγαίνει από τη βάση δεδομένων" (το order.subtotal στη βάση δεν είχε/
+  // έχει αποστολή, βλ. migration 20260919071300 + OrderSummaryRoute.jsx).
+  // shipping/grandTotal ΔΕΝ destructure-άρονται πια — getOrderTotals() τα
+  // υπολογίζει ακόμα (θα χρειαστούν όταν έχουμε πραγματικό κόστος
+  // αποστολής), απλά δεν εμφανίζονται εδώ.
+  const { net, vat } = getOrderTotals(subtotal)
 
   function handleCheckout(e) {
     e.preventDefault()
@@ -64,12 +84,13 @@ export default function CartRoute() {
     })
   }
 
-  // 15/9, ίδιο bulk-clear με το CartDialog.jsx (πρόσθεσα εκεί νωρίτερα
-  // σήμερα) — window.confirm επίτηδες, καταστροφική/μη αναστρέψιμη ενέργεια.
+  // 15/9, ίδιο bulk-clear με το CartDialog.jsx. 19/9, ρητό αίτημα χρήστη:
+  // το window.confirm αντικαταστάθηκε από πραγματικό modal (βλ. Dialog πιο
+  // κάτω στο JSX) — αυτό εδώ πλέον απλά εκτελεί, το ίδιο το κουμπί ανοίγει
+  // το modal, ΟΧΙ αυτή τη συνάρτηση κατευθείαν.
   function handleClearCart() {
-    if (window.confirm("Να αδειάσει όλο το καλάθι σου;")) {
-      clearCart()
-    }
+    clearCart()
+    setClearConfirmOpen(false)
   }
 
   return (
@@ -89,9 +110,17 @@ export default function CartRoute() {
 
       <div className="bg-white">
         <div className="mx-auto max-w-2xl px-4 pt-16 pb-24 sm:px-6 lg:max-w-7xl lg:px-8">
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
-          Το καλάθι σου
-        </h1>
+          {/* 19/9, ρητό αίτημα χρήστη: ίδιο "γκρι πλαίσιο" ύφος με τις
+              υπόλοιπες σελίδες merch (MerchCategoriesRoute.jsx/
+              MerchCategoryRoute.jsx/ProductOverviewRoute.jsx) — αντιγραφή
+              του ίδιου, ήδη καθιερωμένου pattern, όχι κάτι νέο. */}
+          <div className="rounded-2xl bg-gray-50 p-6 ring-1 ring-gray-200 sm:p-8">
+            {/* 19/9, ρητό αίτημα χρήστη: κεντραρισμένος τίτλος με κάτω γραμμή,
+                ίδιο μοτίβο με τον τίτλο κατηγορίας στο MerchCategoryRoute.jsx
+                — συνέπεια με τις υπόλοιπες σελίδες merch. */}
+            <h1 className="border-b border-gray-200 pb-4 text-center text-2xl font-bold tracking-tight text-gray-900">
+              Το καλάθι σου
+            </h1>
 
         {isLoading ? (
           <div className="mt-12 flex flex-col gap-6">
@@ -125,19 +154,9 @@ export default function CartRoute() {
             className="mt-12 lg:grid lg:grid-cols-12 lg:items-start lg:gap-x-12 xl:gap-x-16"
           >
             <section aria-labelledby="cart-heading" className="lg:col-span-7">
-              <div className="flex items-center justify-between">
-                <h2 id="cart-heading" className="sr-only">
-                  Προϊόντα στο καλάθι σου
-                </h2>
-                <span />
-                <button
-                  type="button"
-                  onClick={handleClearCart}
-                  className="text-xs font-medium text-gray-500 hover:text-red-600"
-                >
-                  Άδειασμα καλαθιού
-                </button>
-              </div>
+              <h2 id="cart-heading" className="sr-only">
+                Προϊόντα στο καλάθι σου
+              </h2>
 
               <ul role="list" className="divide-y divide-gray-200 border-t border-b border-gray-200">
                 {items.map(({ id: cartItemId, product, quantity, variant }) => {
@@ -150,11 +169,16 @@ export default function CartRoute() {
                   return (
                     <li key={cartItemId} className="flex py-6 sm:py-10">
                       <div className="shrink-0">
-                        <img
-                          alt={product.name}
-                          src={product.image_urls?.[0]}
-                          className="size-24 rounded-md object-cover sm:size-48"
-                        />
+                        {/* 19/9, ρητό αίτημα χρήστη: κλικ πάνω στη φωτογραφία
+                            πάει πίσω στη σελίδα του προϊόντος (ProductOverviewRoute),
+                            ίδιο URL με τις κάρτες προϊόντων (ProductList.jsx). */}
+                        <Link to={`/merch/overview/${product.slug}`}>
+                          <img
+                            alt={product.name}
+                            src={product.image_urls?.[0]}
+                            className="size-24 rounded-md object-cover sm:size-48"
+                          />
+                        </Link>
                       </div>
 
                       <div className="ml-4 flex flex-1 flex-col justify-between sm:ml-6">
@@ -175,6 +199,16 @@ export default function CartRoute() {
 
                           <div className="mt-4 sm:mt-0 sm:pr-9">
                             <div className="flex items-center gap-2">
+                              {/* 19/9, ρητό αίτημα χρήστη (screenshot 2): ίδια θέση/σειρά
+                                  με το SizeSelector.jsx — το "(Ν)" ΠΡΙΝ από το stepper,
+                                  όχι μετά. Ρητό αίτημα χρήστη (νέο screenshot): λέξη
+                                  "Διαθεσιμότητα" μπροστά — πριν ήταν μόνο "(5)", χωρίς
+                                  καμία εξήγηση τι δείχνει αυτός ο αριθμός. */}
+                              {stockLimit != null && (
+                                <span className="text-xs text-gray-500">
+                                  Διαθεσιμότητα ({stockLimit})
+                                </span>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => updateQuantity(cartItemId, -1)}
@@ -192,8 +226,21 @@ export default function CartRoute() {
                                 +
                               </button>
                             </div>
-                            {atLimit && (
-                              <p className="mt-1 text-xs text-gray-500">
+                            {/* 19/9, ρητό αίτημα χρήστη — bug: "γιατί αλλάζουν θέση
+                                αυτά;": αυτό το μήνυμα πριν εμφανιζόταν/εξαφανιζόταν
+                                εντελώς (conditional render), οπότε άλλαζε το ύψος
+                                ΑΥΤΟΥ του <li> και ΟΛΑ τα επόμενα προϊόντα της λίστας
+                                "πηδούσαν" θέση από κάτω. Fix: το μήνυμα είναι ΠΑΝΤΑ
+                                στο DOM (σταθερό ύψος γραμμής), απλά γίνεται invisible
+                                (καταλαμβάνει τον ίδιο χώρο, απλά δεν φαίνεται) όταν δεν
+                                ισχύει — καμία μετατόπιση πια στα υπόλοιπα προϊόντα. */}
+                            {stockLimit != null && (
+                              <p
+                                className={cn(
+                                  "mt-1 text-xs text-gray-500",
+                                  !atLimit && "invisible"
+                                )}
+                              >
                                 Έχεις ήδη όλη τη διαθέσιμη ποσότητα ({stockLimit}).
                               </p>
                             )}
@@ -215,17 +262,54 @@ export default function CartRoute() {
                   )
                 })}
               </ul>
+
+              {/* 19/9, ρητό αίτημα χρήστη (screenshot): το "Άδειασμα
+                  καλαθιού" μετακόμισε εδώ — κάτω από τη λίστα/γραμμή,
+                  ΠΑΝΩ από τη "Σύνοψη παραγγελίας" — σε κυκλικό (rounded-full)
+                  κόκκινο κουμπί αντί για απλό link πάνω-δεξιά, με το κάδο
+                  εικονίδιο δεξιά από το κείμενο, και κεντραρισμένο (τόσο
+                  το ίδιο το κουμπί μέσα στη σειρά του, όσο και το
+                  περιεχόμενό του μέσα στο κουμπί). Ανοίγει modal
+                  επιβεβαίωσης (βλ. Dialog πιο κάτω) αντί να αδειάζει
+                  κατευθείαν το καλάθι. */}
+              <div className="mt-6 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setClearConfirmOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                >
+                  Άδειασμα καλαθιού
+                  <TrashIcon aria-hidden="true" className="size-4" />
+                </button>
+              </div>
             </section>
 
             {/* Order summary */}
+            {/* 19/9: η σελίδα έγινε γκρι γύρω-γύρω (βλ. πιο πάνω) — αυτό το
+                section άλλαξε από bg-gray-50 σε bg-white + shadow-2xl (λευκή
+                κάρτα πάνω σε γκρι πλαίσιο, ίδιο μοτίβο με το "Μέγεθος" στο
+                ProductOverviewRoute.jsx) — αλλιώς θα ήταν γκρι μέσα σε γκρι,
+                αόρατο περίγραμμα. */}
             <section
               aria-labelledby="summary-heading"
-              className="mt-16 rounded-lg bg-gray-50 px-4 py-6 sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8"
+              className="mt-16 rounded-lg bg-white px-4 py-6 shadow-2xl sm:p-6 lg:col-span-5 lg:mt-0 lg:p-8"
             >
               <h2 id="summary-heading" className="text-lg font-medium text-gray-900">
                 Σύνοψη παραγγελίας
               </h2>
 
+              {/* 19/9, ρητό αίτημα χρήστη — "να μην μπερδευτούμε, θέλω ο
+                  fan να βλέπει το κανονικό ποσό, αυτό που βγαίνει από τη
+                  βάση δεδομένων": αφαιρέθηκαν η γραμμή "Έξοδα αποστολής"
+                  και το "Τελικό σύνολο" (που τα πρόσθετε) — το πραγματικό
+                  κόστος αποστολής δεν είναι ακόμα γνωστό (εκκρεμεί
+                  συνεργασία courier, βλ. concerto-brief.md), οπότε δεν
+                  δείχνουμε πια έναν αριθμό-εικασία εδώ. Το "Σύνολο" τώρα
+                  είναι ΑΚΡΙΒΩΣ το subtotal που αποθηκεύεται στην παραγγελία
+                  (order.subtotal) — ίδιο νούμερο σε ΚΑΘΕ σελίδα του merch
+                  flow πλέον, καμία ασυμφωνία. Θα ξαναμπεί γραμμή αποστολής
+                  (εδώ ΚΑΙ στο OrderSummaryRoute.jsx, μαζί) με πραγματικό
+                  αριθμό όταν κλείσει η συνεργασία. */}
               <dl className="mt-6 space-y-4">
                 <div className="flex items-center justify-between border-t border-gray-200 pt-4 first:border-t-0 first:pt-0">
                   <dt className="text-sm text-gray-600">Καθαρή αξία</dt>
@@ -236,12 +320,8 @@ export default function CartRoute() {
                   <dd className="text-sm font-medium text-gray-900">{vat.toFixed(2)}€</dd>
                 </div>
                 <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-                  <dt className="text-sm text-gray-600">Έξοδα αποστολής</dt>
-                  <dd className="text-sm font-medium text-gray-900">{shipping.toFixed(2)}€</dd>
-                </div>
-                <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-                  <dt className="text-base font-medium text-gray-900">Τελικό σύνολο</dt>
-                  <dd className="text-base font-medium text-gray-900">{grandTotal.toFixed(2)}€</dd>
+                  <dt className="text-base font-medium text-gray-900">Σύνολο</dt>
+                  <dd className="text-base font-medium text-gray-900">{subtotal.toFixed(2)}€</dd>
                 </div>
               </dl>
 
@@ -257,8 +337,31 @@ export default function CartRoute() {
             </section>
           </form>
         )}
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* 19/9, ρητό αίτημα χρήστη: πραγματικό modal επιβεβαίωσης αντί για
+          native window.confirm — ίδια Dialog primitives με το CartDialog.jsx. */}
+      <Dialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Άδειασμα καλαθιού</DialogTitle>
+            <DialogDescription>
+              Θα διαγραφούν όλα τα προϊόντα από το καλάθι σου. Αυτή η ενέργεια δεν
+              αναιρείται.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setClearConfirmOpen(false)}>
+              Άκυρο
+            </Button>
+            <Button type="button" variant="destructive" onClick={handleClearCart}>
+              Άδειασμα καλαθιού
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

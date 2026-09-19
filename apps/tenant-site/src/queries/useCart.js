@@ -1,3 +1,4 @@
+import { useRef } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "../lib/supabase"
 
@@ -65,7 +66,21 @@ export function useCart(fanId, tenantId) {
   // ανά προϊόν. Τώρα ένα προϊόν με μεγέθη μπορεί να έχει ΠΟΛΛΑΠΛΕΣ γραμμές
   // (μία ανά μέγεθος) — το product.id δεν αρκεί πια για να διαλέξει τη
   // ΣΩΣΤΗ. Κλειδί έγινε το ίδιο το cart_items.id (μοναδικό ανά γραμμή).
-  const updateQuantity = useMutation({
+  //
+  // 19/9, ρητό αίτημα χρήστη, bug: πατώντας γρήγορα +/- πολλές φορές στη
+  // σειρά στο CartRoute.jsx, κάθε κλικ έστελνε ΑΜΕΣΩΣ δικό του αίτημα στη
+  // βάση (RPC) — τα παράλληλα αιτήματα/onSettled invalidations
+  // "τσακώνονταν" μεταξύ τους και η οθόνη καθυστερούσε αισθητά να
+  // ανταποκριθεί. Fix (ίδιο πνεύμα με το ProductOverviewRoute.jsx, όπου τα
+  // +/- δουλεύουν σε τοπικό state χωρίς ΚΑΝΕΝΑ δίκτυο ανά κλικ): η οθόνη
+  // ενημερώνεται πάντα ΑΜΕΣΩΣ/τοπικά σε κάθε κλικ (μηδενική καθυστέρηση),
+  // αλλά το πραγματικό αίτημα προς τη βάση "μαζεύεται" (debounce, 400ms) —
+  // αν ο χρήστης πατήσει 5 φορές το "+" μέσα σε μισό δευτερόλεπτο, φεύγει
+  // ΕΝΑ αίτημα με άθροισμα +5, όχι 5 ξεχωριστά. Το mutation δεν κάνει πια
+  // δικό του optimistic onMutate (η άμεση ενημέρωση γίνεται στο
+  // updateQuantity() παρακάτω, ΠΡΙΝ καν φύγει το αίτημα) — σε λάθος απλά
+  // ξαναφέρνουμε την πραγματική κατάσταση από τη βάση.
+  const updateQuantityMutation = useMutation({
     mutationFn: async ({ cartItemId, delta }) => {
       const { data, error } = await supabase.rpc("adjust_cart_quantity", {
         p_cart_item_id: cartItemId,
@@ -74,30 +89,46 @@ export function useCart(fanId, tenantId) {
       if (error) throw error
       return data
     },
-    // Optimistic update: ενημέρωσε αμέσως την οθόνη, πριν καν απαντήσει η βάση
-    onMutate: async ({ cartItemId, delta }) => {
-      await queryClient.cancelQueries({ queryKey: ["cart", fanId] })
-      const previousCart = queryClient.getQueryData(["cart", fanId])
-
-      queryClient.setQueryData(["cart", fanId], (old) => {
-        if (!old) return old
-        return old
-          .map((row) =>
-            row.id === cartItemId ? { ...row, quantity: row.quantity + delta } : row
-          )
-          .filter((row) => row.quantity > 0)
-      })
-
-      return { previousCart }
-    },
-    // Αν κάτι πάει στραβά, επανάφερε την προηγούμενη, σωστή κατάσταση
-    onError: (err, variables, context) => {
-      if (context?.previousCart) {
-        queryClient.setQueryData(["cart", fanId], context.previousCart)
-      }
-    },
+    onError: () => queryClient.invalidateQueries({ queryKey: ["cart", fanId] }),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["cart", fanId] }),
   })
+
+  // cartItemId -> άθροισμα clicks που δεν έχουν φύγει ακόμα προς τη βάση,
+  // cartItemId -> το ενεργό setTimeout — και τα δύο refs ώστε να επιζούν
+  // ανάμεσα σε renders χωρίς να ξαναδημιουργούνται.
+  const pendingDeltaRef = useRef({})
+  const debounceTimerRef = useRef({})
+
+  function updateQuantity(cartItemId, delta) {
+    // 19/9, ΠΡΑΓΜΑΤΙΚΗ αιτία της αργής απόκρισης (βρέθηκε μετά το πρώτο,
+    // ημιτελές fix): το query ζει στο cache-key ["cart", fanId, tenantId]
+    // (βλ. useQuery πιο πάνω), αλλά το setQueryData εδώ έγραφε σε
+    // ["cart", fanId] — ΔΙΑΦΟΡΕΤΙΚΟ κλειδί (το setQueryData χρειάζεται
+    // ΑΚΡΙΒΕΣ match, σε αντίθεση με το invalidateQueries που κάνει
+    // prefix-match). Άρα η "άμεση/τοπική" ενημέρωση έγραφε σε ένα ΑΧΡΗΣΤΟ
+    // cache entry που καμία οθόνη δεν διάβαζε ποτέ — η οθόνη ΠΑΝΤΑ περίμενε
+    // το πραγματικό network round-trip (εξ ου και η καθυστέρηση, ακόμα και
+    // με το debounce). Fix: ίδιο ΑΚΡΙΒΩΣ κλειδί με το useQuery.
+    queryClient.setQueryData(["cart", fanId, tenantId], (old) => {
+      if (!old) return old
+      return old
+        .map((row) =>
+          row.id === cartItemId ? { ...row, quantity: row.quantity + delta } : row
+        )
+        .filter((row) => row.quantity > 0)
+    })
+
+    pendingDeltaRef.current[cartItemId] = (pendingDeltaRef.current[cartItemId] || 0) + delta
+    clearTimeout(debounceTimerRef.current[cartItemId])
+    debounceTimerRef.current[cartItemId] = setTimeout(() => {
+      const totalDelta = pendingDeltaRef.current[cartItemId]
+      delete pendingDeltaRef.current[cartItemId]
+      delete debounceTimerRef.current[cartItemId]
+      if (totalDelta) {
+        updateQuantityMutation.mutate({ cartItemId, delta: totalDelta })
+      }
+    }, 400)
+  }
   const removeItem = useMutation({
     mutationFn: async (cartItemId) => {
       const { error } = await supabase.from("cart_items").delete().eq("id", cartItemId)
@@ -152,7 +183,7 @@ export function useCart(fanId, tenantId) {
     // επιστρέφει ένα Promise που μπορεί να αγνοηθεί.
     addItem: (product, quantity, variantId) =>
       addItem.mutateAsync({ product, quantity, variantId }),
-    updateQuantity: (cartItemId, delta) => updateQuantity.mutate({ cartItemId, delta }),
+    updateQuantity,
     removeItem: (cartItemId) => removeItem.mutate(cartItemId),
     clearCart: () => clearCart.mutate(),
   }

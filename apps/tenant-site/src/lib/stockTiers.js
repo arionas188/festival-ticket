@@ -5,16 +5,31 @@
 // τα αγγίζουμε, είναι shadcn-generated, εκτός scope). Ένα σημείο αλήθειας
 // για τα tiers διαθεσιμότητας — StockBadge.jsx (pill) ΚΑΙ SizeSelector.jsx
 // (χρωματισμένα κουμπιά μεγέθους) εισάγουν από εδώ, όχι ξαναγραμμένη λογική.
+// 19/9, ρητό αίτημα χρήστη (screenshot — προϊόν "Εξαντλημένο" ενώ στην
+// ουσία είναι απλά δεσμευμένο μέσα σε ενεργό hold κάποιου άλλου fan, μέσα
+// στο 10λεπτο/1λεπτο παράθυρό του να πληρώσει): "μπορούμε να γράφουμε
+// προσωρινά 'μη διαθέσιμο' και αν όντως γίνει η πληρωμή να γράφει
+// 'εξαντλημένο';" — ξεχωριστό tier, ΟΧΙ κόκκινο (δεν είναι μόνιμο/τελικό),
+// για όταν το μηδέν εξηγείται από ενεργό hold (βλ. useActiveStockHolds.js/
+// migration 20260919090100). Ίδιο interaction behavior με το "Εξαντλημένο"
+// (απενεργοποιημένο, δεν μπορεί να προστεθεί στο καλάθι) — αλλάζει ΜΟΝΟ η
+// ετικέτα/χρώμα, όχι η δυνατότητα αγοράς.
+const TEMPORARILY_UNAVAILABLE_TIER = {
+  className: "bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-500/20",
+  label: () => "Μη διαθέσιμο",
+  shortLabel: "Μη διαθέσιμο",
+}
+
+const OUT_OF_STOCK_TIER = {
+  className: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20",
+  label: () => "Εξαντλημένο",
+  // 15/9: shortLabel -- ίδιο κείμενο ΧΩΡΙΣ τον αριθμό, ρητό αίτημα χρήστη
+  // ο ακριβής αριθμός να φαίνεται ΜΟΝΟ μέσα στη σελίδα προϊόντος (StockBadge
+  // showCount=false στην κάρτα του grid, βλ. ProductList.jsx).
+  shortLabel: "Εξαντλημένο",
+}
+
 const TIERS = [
-  {
-    test: (q) => q <= 0,
-    className: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20",
-    label: () => "Εξαντλημένο",
-    // 15/9: shortLabel -- ίδιο κείμενο ΧΩΡΙΣ τον αριθμό, ρητό αίτημα χρήστη
-    // ο ακριβής αριθμός να φαίνεται ΜΟΝΟ μέσα στη σελίδα προϊόντος (StockBadge
-    // showCount=false στην κάρτα του grid, βλ. ProductList.jsx).
-    shortLabel: "Εξαντλημένο",
-  },
   {
     test: (q) => q <= 2,
     className: "bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20",
@@ -36,7 +51,14 @@ const TIERS = [
   },
 ]
 
-export function getStockTier(quantity) {
+// 19/9: δεύτερη, προαιρετική παράμετρος — true όταν υπάρχει ενεργό hold
+// (βλ. useActiveStockHolds.js) που εξηγεί ένα μηδενικό/αρνητικό stock.
+// Όλα τα ήδη υπάρχοντα call sites (χωρίς 2ο όρισμα) συνεχίζουν να
+// δουλεύουν ΑΚΡΙΒΩΣ όπως πριν (hasActiveHold === undefined -> falsy).
+export function getStockTier(quantity, hasActiveHold = false) {
+  if (quantity <= 0) {
+    return hasActiveHold ? TEMPORARILY_UNAVAILABLE_TIER : OUT_OF_STOCK_TIER
+  }
   return TIERS.find((t) => t.test(quantity))
 }
 

@@ -1,8 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query'
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import './index.css'
+import { recoverFromBrokenSession } from './lib/authRecovery.js'
 import App from './App.jsx'
 import TenantLayout from './components/Header/TenantLayout.jsx'
 import MerchCategoriesRoute from './components/Merch/MerchCategoriesRoute.jsx'
@@ -25,7 +26,23 @@ import FanOrdersRoute from './components/Concerto/FanDashboard/FanOrdersRoute.js
 import FanCurrentCartRoute from './components/Concerto/FanDashboard/FanCurrentCartRoute.jsx'
 import ErrorPage from './components/ErrorPage/ErrorPage.jsx'
 
-const queryClient = new QueryClient()
+// 19/9, ρητή αναφορά χρήστη (401 στο console σε cart_items) — το "σπασμένο
+// session" recovery (18/9 diagnosis, βλ. lib/authRecovery.js) εφαρμόζεται
+// εδώ ΚΕΝΤΡΙΚΑ, σε ΚΑΘΕ query/mutation της εφαρμογής, αντί να χρειάζεται
+// να το θυμάται/ξαναγράφει ο καθένας ξεχωριστά (πριν ζούσε μόνο μέσα στο
+// useFanSession.js, γι' αυτό δεν "έπιασε" το ίδιο πρόβλημα στο cart_items).
+// recoverFromBrokenSession κάνει local sign-out ΜΟΝΟ αν όντως αναγνωρίσει
+// έναν από τους γνωστούς κωδικούς "άκυρο/ληγμένο session" — οτιδήποτε
+// άλλο (π.χ. κανονικό δικτυακό σφάλμα) περνάει ανέγγιχτο, ο καθένας
+// caller συνεχίζει να βλέπει το δικό του error state κανονικά.
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (error) => recoverFromBrokenSession(error),
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => recoverFromBrokenSession(error),
+  }),
+})
 
 const router = createBrowserRouter([
   {

@@ -2,7 +2,10 @@ import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { useCart } from "../../queries/useCart"
+import { useActiveStockHolds } from "../../queries/useActiveStockHolds"
 import SizeSelector from "./SizeSelector"
+import StockBadge from "./StockBadge"
+import { getTotalStock } from "../../lib/stockTiers"
 
 // 18/9: onAddToCart/isLoggedIn/onRequireAuth αφαιρέθηκαν από εδώ (ήταν
 // unused μετά την αφαίρεση του "Προσθήκη στο καλάθι", βλ. σχόλιο στο
@@ -15,7 +18,10 @@ export default function ProductQuickShop({
   fanId,
   tenantId,
 }) {
-  const [quantity, setQuantity] = useState(1)
+  // 19/9, ρητό αίτημα χρήστη: default 0 (όχι 1) — το "Πληρωμή" ξεκινάει
+  // ανενεργό μέχρι να βάλει ο fan έστω 1, ίδιο μοτίβο με το μέγεθος στα
+  // ρούχα (hasSizeSelection, βλ. canAddToCart παρακάτω).
+  const [quantity, setQuantity] = useState(0)
   // 15/9: ίδιο multi-size + ανά-μέγεθος-ποσότητα μοντέλο με
   // ProductOverviewRoute.jsx (SizeSelector.jsx άλλαξε API εκεί — αναγκαία
   // ενημέρωση εδώ ώστε να μη σπάσει, ο χρήστης δεν ζήτησε ρητά αλλαγή σε
@@ -26,6 +32,9 @@ export default function ProductQuickShop({
   // σχόλιο — ίδια λογική εδώ, ίδιο σημείο αλήθειας (stock_quantity μείον ό,τι
   // ήδη έχει στο καλάθι για αυτό το προϊόν).
   const { items: cartItems } = useCart(fanId, tenantId)
+  // 19/9, ρητό αίτημα χρήστη: "Μη διαθέσιμο" (ενεργό hold, προσωρινό) αντί
+  // για "Εξαντλημένο" (πραγματικό/μόνιμο μηδέν) — βλ. lib/stockTiers.js.
+  const { heldVariantIds, heldProductIds } = useActiveStockHolds(tenantId)
 
   // Η επαναφορά ποσότητας/μεγέθους γίνεται πλέον με remount: ο caller δίνει
   // key={product.id}, οπότε το state ξεκινά καθαρό σε κάθε προϊόν.
@@ -56,8 +65,12 @@ export default function ProductQuickShop({
       ? Math.max(0, product.stock_quantity - simpleExistingCartQty)
       : Infinity
     : 0
-  const simpleCanAdd = !hasVariants && simpleMaxAddable > 0
-  const effectiveQuantity = Math.min(quantity, Math.max(1, simpleMaxAddable))
+  const effectiveQuantity = Math.min(quantity, Math.max(0, simpleMaxAddable))
+  const isSoldOut = !hasVariants && simpleMaxAddable <= 0
+  // 19/9: πρέπει ΚΑΙ να υπάρχει stock ΚΑΙ ο fan να έχει βάλει ποσότητα > 0
+  // — πριν εξαρτιόταν μόνο από το stock, οπότε με default ποσότητα 1 το
+  // "Πληρωμή" ήταν ενεργό αμέσως μόλις άνοιγε το modal.
+  const simpleCanAdd = !hasVariants && effectiveQuantity > 0
 
   // 18/9, ρητό αίτημα χρήστη: το "Πληρωμή" να ξεκινάει ανενεργό και να
   // ενεργοποιείται μόλις ο fan επιλέξει έγκυρο μέγεθος+ποσότητα (ή απλή
@@ -109,6 +122,7 @@ export default function ProductQuickShop({
                         quantities={quantities}
                         maxByVariant={maxByVariant}
                         onChangeQuantity={handleChangeQuantity}
+                        heldVariantIds={heldVariantIds}
                       />
                       {hasVariants && !hasSizeSelection && (
                         <p className="mt-2 text-xs text-gray-500">
@@ -120,12 +134,20 @@ export default function ProductQuickShop({
 
                   {!hasVariants && (
                     <div className="mt-6">
+                      {/* 19/9, ρητό αίτημα χρήστη: ορατή διαθεσιμότητα και
+                          εδώ μέσα (όχι μόνο στην κάρτα του grid) — ίδιο
+                          StockBadge, ίδιο σημείο αλήθειας (getTotalStock). */}
+                      <StockBadge
+                        quantity={getTotalStock(product)}
+                        className="mb-3"
+                        hasActiveHold={heldProductIds.has(product.id)}
+                      />
                       <div className="text-sm font-medium text-gray-900">Ποσότητα</div>
                       <div className="mt-2 flex items-center gap-3">
                         <button
                           type="button"
-                          onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                          disabled={!simpleCanAdd}
+                          onClick={() => setQuantity((q) => Math.max(0, q - 1))}
+                          disabled={isSoldOut || effectiveQuantity <= 0}
                           className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           −
@@ -142,12 +164,18 @@ export default function ProductQuickShop({
                           +
                         </button>
                       </div>
-                      {!simpleCanAdd && (
+                      {isSoldOut ? (
                         <p className="mt-1 text-xs text-gray-500">
                           {simpleExistingCartQty > 0
                             ? "Έχεις ήδη όλη τη διαθέσιμη ποσότητα στο καλάθι σου."
                             : "Εξαντλημένο."}
                         </p>
+                      ) : (
+                        effectiveQuantity === 0 && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Επίλεξε ποσότητα για να συνεχίσεις.
+                          </p>
+                        )
                       )}
                     </div>
                   )}

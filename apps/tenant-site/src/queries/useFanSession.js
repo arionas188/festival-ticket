@@ -12,43 +12,17 @@ import { syncFanFromAuth } from "./syncFanFromAuth"
 // κατάσταση follow μετά από logout, το isFollowing πρέπει να προκύπτει
 // πάντα ζωντανά από τη βάση. Βλ. και useFollowTenant παρακάτω και το
 // (αφαιρεμένο) useFollowAllTenants.js.
-// 18/9: κωδικοί σφάλματος που σημαίνουν "το session αυτής της συσκευής
-// είναι στην πραγματικότητα άκυρο/σπασμένο", όχι ένα κανονικό, ανακτήσιμο
-// error — σε όλες αυτές τις περιπτώσεις ο σωστός χειρισμός είναι local
-// sign-out (καθάρισμα μόνο στη συσκευή, καμία server-side ενέργεια), ώστε
-// ο fan να ξαναγίνεται "επισκέπτης" και να μπορεί να ξανακάνει σύνδεση
-// καθαρά, αντί να μένει κολλημένος με σπασμένα requests σε κάθε φόρτωση.
-function isBrokenSessionError(error) {
-  return (
-    // foreign key violation: το auth.users row αυτού του session δεν
-    // υπάρχει πια (π.χ. ο λογαριασμός διαγράφηκε από άλλο subdomain/tab).
-    error.code === "23503" ||
-    // not-null violation στο fans.id: σημαίνει ότι το auth.uid() γύρισε
-    // null μέσα στην function — το request έφτασε με ένα token που δεν
-    // αντιστοιχεί πια σε έγκυρο, ενεργό session (π.χ. ήδη χρησιμοποιημένο/
-    // ληγμένο refresh token — αυτό ήταν η αιτία των δύο 400 σφαλμάτων
-    // που ανέφερε ο χρήστης στο concertofamily.netlify.app).
-    error.code === "23502" ||
-    // PostgREST's δικοί του κωδικοί για ληγμένο/άκυρο JWT.
-    error.code === "PGRST301" ||
-    error.code === "PGRST303"
-  )
-}
-
+//
+// 19/9: το "σπασμένο session" recovery (18/9 diagnosis) μετακόμισε στο
+// κοινό lib/authRecovery.js — εφαρμόζεται πλέον ΚΕΝΤΡΙΚΑ σε main.jsx
+// (QueryCache onError), όχι μόνο εδώ. Το queryFn παρακάτω απλά κάνει throw
+// κανονικά· ο global handler αναλαμβάνει το local sign-out αν χρειαστεί.
 export function useFanSession(user, tenantId) {
   return useQuery({
     queryKey: ["fan_session", user?.id, tenantId],
     queryFn: async () => {
       const { error: fanError } = await syncFanFromAuth(user)
-      if (fanError) {
-        // scope:"local" καθαρίζει μόνο το τοπικό storage — δεν χρειάζεται/
-        // δεν έχει νόημα server call, ο server δεν έχει πια τίποτα έγκυρο
-        // να ακυρώσει γι' αυτό το session.
-        if (isBrokenSessionError(fanError)) {
-          await supabase.auth.signOut({ scope: "local" })
-        }
-        throw fanError
-      }
+      if (fanError) throw fanError
 
       const { data, error: followError } = await supabase
         .from("tenant_follows")

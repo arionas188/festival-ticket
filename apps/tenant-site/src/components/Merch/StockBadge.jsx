@@ -16,12 +16,16 @@ import { getStockTier } from "../../lib/stockTiers"
 // (και στο SizeSelector, ανά μέγεθος). showCount=false δείχνει μόνο το
 // tier text (π.χ. "Διαθέσιμα"), χωρίς το "(N)". Default true -- καμία
 // αλλαγή συμπεριφοράς όπου δεν περάσαμε ρητά false.
-export default function StockBadge({ quantity, className, showCount = true }) {
+// 19/9, ρητό αίτημα χρήστη: νέο προαιρετικό hasActiveHold (βλ.
+// useActiveStockHolds.js) -- όταν quantity <= 0 ΚΑΙ hasActiveHold=true,
+// δείχνει "Μη διαθέσιμο" αντί για "Εξαντλημένο" (βλ. lib/stockTiers.js).
+// Default false -- καμία αλλαγή συμπεριφοράς όπου δεν περάσαμε ρητά true.
+export default function StockBadge({ quantity, className, showCount = true, hasActiveHold = false }) {
   // Προϊόν χωρίς tracked stock (null/undefined) — δεν εμφανίζουμε τίποτα,
   // δεν έχουμε πραγματικό δεδομένο για να δείξουμε.
   if (quantity == null) return null
 
-  const tier = getStockTier(quantity)
+  const tier = getStockTier(quantity, hasActiveHold)
 
   return (
     <span

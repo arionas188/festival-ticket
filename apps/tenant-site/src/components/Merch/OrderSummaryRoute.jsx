@@ -140,11 +140,36 @@ export default function OrderSummaryRoute() {
           ))}
         </ul>
 
-        <div className="flex items-center justify-between border-t border-gray-200 pt-3">
-          <span className="text-sm font-medium text-gray-900">Σύνολο</span>
-          <span className="text-base font-semibold text-gray-900">
-            {Number(order.subtotal).toFixed(2)}€
-          </span>
+        {/* 19/9, ρητό αίτημα χρήστη: ίδια ανάλυση με το καλάθι (CartRoute.jsx,
+            18/9) — net_amount/vat_amount αποθηκεύονται πλέον στη βάση
+            (βλ. migration 20260919071300_add_order_vat_breakdown.sql).
+            ΡΗΤΑ χωρίς έξοδα αποστολής — δεν είναι ακόμα γνωστό το
+            πραγματικό κόστος (εκκρεμεί συνεργασία courier). Άρα αυτό το
+            "Σύνολο" θα διαφέρει προσωρινά από το "Τελικό σύνολο" του
+            καλαθιού (που δείχνει +3€ αποστολή) — αναμενόμενο, μέχρι να
+            προστεθεί η αποστολή και εδώ, μαζί, όταν έχουμε πραγματικό
+            αριθμό. Fallback σε order.subtotal αν κάποια παλιά παραγγελία
+            (πριν το migration) δεν έχει net_amount/vat_amount. */}
+        <div className="flex flex-col gap-1.5 border-t border-gray-200 pt-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">Καθαρή αξία</span>
+            <span className="text-sm font-medium text-gray-900">
+              {Number(order.net_amount ?? order.subtotal).toFixed(2)}€
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">ΦΠΑ 24%</span>
+            <span className="text-sm font-medium text-gray-900">
+              {Number(order.vat_amount ?? 0).toFixed(2)}€
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-900">Σύνολο</span>
+            <span className="text-base font-semibold text-gray-900">
+              {Number(order.subtotal).toFixed(2)}€
+            </span>
+          </div>
+          <p className="text-xs text-gray-400">Δεν περιλαμβάνει έξοδα αποστολής.</p>
         </div>
       </div>
 

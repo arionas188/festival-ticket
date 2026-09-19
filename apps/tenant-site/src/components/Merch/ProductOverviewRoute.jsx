@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import StockBadge from "./StockBadge"
 import { getTotalStock } from "../../lib/stockTiers"
+import { useActiveStockHolds } from "../../queries/useActiveStockHolds"
 import { getCategoryLabel } from "../../lib/merchCategories"
 import { shareLink } from "../../lib/shareLink"
 import MerchBreadcrumb from "./MerchBreadcrumb"
@@ -50,6 +51,9 @@ export default function ProductOverviewRoute() {
   // προστεθεί (stock_quantity μείον ό,τι ήδη έχει ο fan στο καλάθι), και
   // κόβουμε το stepper/"Προσθήκη" εκεί.
   const { items: cartItems } = useCart(context.fanId, context.tenantId)
+  // 19/9, ρητό αίτημα χρήστη: "Μη διαθέσιμο" (ενεργό hold, προσωρινό) αντί
+  // για "Εξαντλημένο" (πραγματικό/μόνιμο μηδέν) — βλ. lib/stockTiers.js.
+  const { heldVariantIds, heldProductIds } = useActiveStockHolds(context.tenantId)
 
   // 15/9, ρητό αίτημα χρήστη (screenshots 2-4): αντί για ΕΝΑ επιλεγμένο
   // μέγεθος + μία κοινή ποσότητα, ο fan μπορεί τώρα να βάλει ποσότητα σε
@@ -57,7 +61,10 @@ export default function ProductOverviewRoute() {
   // variantId -> ποσότητα. Για προϊόντα ΧΩΡΙΣ μεγέθη (music/other, ή
   // clothing χωρίς backfill ακόμα) χρησιμοποιείται η παλιά, απλή ποσότητα.
   const [quantities, setQuantities] = useState({})
-  const [simpleQuantity, setSimpleQuantity] = useState(1)
+  // 19/9, ρητό αίτημα χρήστη: default 0 (όχι 1) — "Προσθήκη στο καλάθι"/
+  // "Ολοκλήρωση παραγγελίας" ξεκινούν ανενεργά μέχρι να βάλει ο fan έστω 1,
+  // ίδιο μοτίβο με το μέγεθος στα ρούχα ΚΑΙ με το ProductQuickShop.jsx.
+  const [simpleQuantity, setSimpleQuantity] = useState(0)
   const [isProcessing, setIsProcessing] = useState(false)
 
   if (isLoading) {
@@ -120,8 +127,12 @@ export default function ProductOverviewRoute() {
       ? Math.max(0, product.stock_quantity - simpleExistingCartQty)
       : Infinity
     : 0
-  const simpleCanAdd = !hasVariants && simpleMaxAddable > 0
-  const effectiveSimpleQuantity = Math.min(simpleQuantity, Math.max(1, simpleMaxAddable))
+  const effectiveSimpleQuantity = Math.min(simpleQuantity, Math.max(0, simpleMaxAddable))
+  const isSoldOut = !hasVariants && simpleMaxAddable <= 0
+  // 19/9: πρέπει ΚΑΙ να υπάρχει stock ΚΑΙ ο fan να έχει βάλει ποσότητα > 0
+  // — πριν εξαρτιόταν μόνο από το stock, οπότε με default ποσότητα 1 τα
+  // κουμπιά ήταν ενεργά αμέσως μόλις φόρτωνε η σελίδα.
+  const simpleCanAdd = !hasVariants && effectiveSimpleQuantity > 0
 
   const canAddToCart = hasVariants ? hasSizeSelection : simpleCanAdd
 
@@ -239,6 +250,7 @@ export default function ProductOverviewRoute() {
 
       <div className="bg-white pt-6 pb-16 sm:pb-24">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <div className="rounded-2xl bg-gray-50 p-6 ring-1 ring-gray-200 sm:p-8">
           <div className="lg:grid lg:grid-cols-2 lg:gap-x-8">
           {/* Gallery — πραγματικές φωτογραφίες του προϊόντος (image_urls),
               όχι placeholder. Η πρώτη πιάνει διπλό πλάτος σε desktop, ίδια
@@ -270,7 +282,11 @@ export default function ProductOverviewRoute() {
             {/* 15/9, ρητό αίτημα χρήστη: εδώ (μέσα στη σελίδα προϊόντος) ο
                 ακριβής αριθμός ΠΑΡΑΜΕΝΕΙ — αφαιρέθηκε ΜΟΝΟ από την κάρτα του
                 grid (βλ. ProductList.jsx, showCount={false}). */}
-            <StockBadge quantity={getTotalStock(product)} className="mt-3" />
+            <StockBadge
+              quantity={getTotalStock(product)}
+              className="mt-3"
+              hasActiveHold={heldProductIds.has(product.id)}
+            />
 
             {product.description && (
               <p className="mt-4 text-sm/6 text-gray-600">{product.description}</p>
@@ -279,14 +295,26 @@ export default function ProductOverviewRoute() {
             {/* 15/9: κάθε γραμμή μεγέθους έχει πλέον ΤΗ ΔΙΚΗ ΤΗΣ ποσότητα
                 (βλ. SizeSelector.jsx) — ο fan μπορεί να επιλέξει πολλαπλά
                 μεγέθη μαζί, χωρίς ξεχωριστό "Ποσότητα" section από κάτω. */}
+            {/* 19/9, ρητό αίτημα χρήστη, δύο γύροι: αρχικά είχε μπει
+                bg-gray-50 ΜΟΝΟ γύρω από αυτό το fieldset — μετά ζητήθηκε
+                ολόκληρη η σελίδα να έχει το γκρι πλαίσιο (βλ. το
+                rounded-2xl bg-gray-50 λίγο πιο πάνω, γύρω από ΟΛΟ το
+                περιεχόμενο). Άρα εδώ πλέον bg-white αντί για bg-gray-50 —
+                "λευκή κάρτα πάνω σε γκρι πλαίσιο", ίδιο μοτίβο/ίδια σκιά
+                (shadow-2xl) με τις κάρτες προϊόντων (ProductList.jsx) —
+                αλλιώς θα ήταν γκρι μέσα σε γκρι, αόρατο περίγραμμα. */}
             {product.category === "clothing" && (
-              <fieldset aria-label="Επιλογή μεγέθους" className="mt-6">
+              <fieldset
+                aria-label="Επιλογή μεγέθους"
+                className="mt-6 rounded-lg bg-white p-3 shadow-2xl sm:p-4"
+              >
                 <div className="text-sm font-medium text-gray-900">Μέγεθος</div>
                 <SizeSelector
                   variants={product.product_variants}
                   quantities={quantities}
                   maxByVariant={maxByVariant}
                   onChangeQuantity={handleChangeQuantity}
+                  heldVariantIds={heldVariantIds}
                 />
                 {hasVariants && !hasSizeSelection && (
                   <p className="mt-2 text-xs text-gray-500">
@@ -304,8 +332,8 @@ export default function ProductOverviewRoute() {
                 <div className="mt-2 flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => setSimpleQuantity((q) => Math.max(1, q - 1))}
-                    disabled={!simpleCanAdd}
+                    onClick={() => setSimpleQuantity((q) => Math.max(0, q - 1))}
+                    disabled={isSoldOut || effectiveSimpleQuantity <= 0}
                     className="flex size-9 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     −
@@ -322,7 +350,7 @@ export default function ProductOverviewRoute() {
                     +
                   </button>
                 </div>
-                {!simpleCanAdd && simpleExistingCartQty > 0 && (
+                {isSoldOut && simpleExistingCartQty > 0 && (
                   <p className="mt-1 text-xs text-gray-500">
                     Έχεις ήδη όλη τη διαθέσιμη ποσότητα στο καλάθι σου.
                   </p>
@@ -332,60 +360,72 @@ export default function ProductOverviewRoute() {
                     {simpleExistingCartQty} ήδη στο καλάθι σου — μέγιστο ακόμα {simpleMaxAddable}.
                   </p>
                 )}
+                {!isSoldOut && effectiveSimpleQuantity === 0 && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Επίλεξε ποσότητα για να συνεχίσεις.
+                  </p>
+                )}
               </div>
             )}
 
-            <div className="mt-6 flex flex-col gap-2">
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  className="flex-1"
-                  onClick={handleAddToCart}
-                  disabled={!canAddToCart || isProcessing}
-                >
-                  Προσθήκη στο καλάθι
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleToggleFavorite}
-                  aria-label={isFavorited ? "Αφαίρεση από αγαπημένα" : "Προσθήκη στα αγαπημένα"}
-                >
-                  {isFavorited ? (
-                    <HeartIconSolid className="size-5 text-red-500" />
-                  ) : (
-                    <HeartIcon className="size-5" />
-                  )}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={handleShare}
-                  aria-label="Κοινοποίηση συνδέσμου"
-                >
-                  <ShareIcon className="size-5" />
-                </Button>
-              </div>
-              {/* 15/9, ρητό αίτημα χρήστη (screenshot 5): "Ολοκλήρωση
-                  παραγγελίας" δίπλα στην ήδη υπάρχουσα σειρά — προσθέτει την
-                  επιλογή στο καλάθι ΚΑΙ πάει κατευθείαν στη συνολική
-                  παραγγελία. */}
+          </div>
+        </div>
+        </div>
+
+          {/* 19/9, ρητό αίτημα χρήστη (screenshot): τα κουμπιά ενέργειας
+              βγαίνουν πλέον ΕΞΩ από το γκρι πλαίσιο (rounded-2xl bg-gray-50
+              πιο πάνω) — ίδιο μοτίβο με το κουμπί "Πληρωμή" στο
+              ProductQuickShop.jsx, που είναι sibling ΕΞΩ από το λευκό Card,
+              όχι εμφωλευμένο μέσα του. */}
+          <div className="mt-6 flex flex-col gap-2">
+            <div className="flex gap-2">
               <Button
                 type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={handleCompleteOrder}
+                className="flex-1"
+                onClick={handleAddToCart}
                 disabled={!canAddToCart || isProcessing}
               >
-                Ολοκλήρωση παραγγελίας
+                Προσθήκη στο καλάθι
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleToggleFavorite}
+                aria-label={isFavorited ? "Αφαίρεση από αγαπημένα" : "Προσθήκη στα αγαπημένα"}
+              >
+                {isFavorited ? (
+                  <HeartIconSolid className="size-5 text-red-500" />
+                ) : (
+                  <HeartIcon className="size-5" />
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={handleShare}
+                aria-label="Κοινοποίηση συνδέσμου"
+              >
+                <ShareIcon className="size-5" />
               </Button>
             </div>
+            {/* 15/9, ρητό αίτημα χρήστη (screenshot 5): "Ολοκλήρωση
+                παραγγελίας" δίπλα στην ήδη υπάρχουσα σειρά — προσθέτει την
+                επιλογή στο καλάθι ΚΑΙ πάει κατευθείαν στη συνολική
+                παραγγελία. */}
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              onClick={handleCompleteOrder}
+              disabled={!canAddToCart || isProcessing}
+            >
+              Ολοκλήρωση παραγγελίας
+            </Button>
           </div>
         </div>
       </div>
-    </div>
     </>
   )
 }
