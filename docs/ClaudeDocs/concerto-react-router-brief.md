@@ -980,6 +980,22 @@ Icon-ordering: C (brand/home) → Προφίλ → Αγαπημένα → Καλ
 
 `npx eslint .` καθαρό (19 errors/1 warning, ίδιο preexisting baseline).
 
+## Admin "Πρόσθεσε προϊόν" — δύο νέα flat routes (20/9)
+
+Ίδιο "flat sibling" μοτίβο με `events/event/new`/`events/event/:eventId/edit`:
+
+```
+/merch/product/new                            → ProductFormRoute (flat sibling — νέο προϊόν)
+/merch/product/:productId/edit                → ProductFormRoute (flat sibling — επεξεργασία προϊόντος)
+```
+
+Ο πλήρης πίνακας routes του `main.jsx` ενημερώνεται εδώ (προστίθενται τα
+δύο παραπάνω στη λίστα του 15/9). Καμία αλλαγή στο υπάρχον μοτίβο route
+state/breadcrumb — αυτά τα δύο routes αντικαθιστούν πλήρως τη σελίδα
+(δεν είναι modal), ακριβώς όπως τα αντίστοιχα του events.
+
+`npx eslint .` καθαρό (19 errors/1 warning, ίδιο preexisting baseline).
+
 ## Οδηγία προς AI assistant (Claude ή άλλο)
 
 > Αυτό είναι το επίσημο, ζωντανό log του React Router task. Ενημέρωσέ το σε κάθε βήμα (τι έγινε, τι αποφασίστηκε, τι εκκρεμεί) — μην αφήνεις να "χαθεί" η σειρά μέσα στο κύριο brief. Ακολούθα αυστηρά τους κανόνες εργασίας στην κορυφή αυτού του εγγράφου.
