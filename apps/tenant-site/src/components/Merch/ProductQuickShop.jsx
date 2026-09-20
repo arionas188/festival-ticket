@@ -3,9 +3,10 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { useCart } from "../../queries/useCart"
 import { useActiveStockHolds } from "../../queries/useActiveStockHolds"
+import { useNow } from "../../hooks/useNow"
 import SizeSelector from "./SizeSelector"
 import StockBadge from "./StockBadge"
-import { getTotalStock } from "../../lib/stockTiers"
+import { getTotalStock, isScheduledUnavailable } from "../../lib/stockTiers"
 
 // 18/9: onAddToCart/isLoggedIn/onRequireAuth αφαιρέθηκαν από εδώ (ήταν
 // unused μετά την αφαίρεση του "Προσθήκη στο καλάθι", βλ. σχόλιο στο
@@ -35,6 +36,7 @@ export default function ProductQuickShop({
   // 19/9, ρητό αίτημα χρήστη: "Μη διαθέσιμο" (ενεργό hold, προσωρινό) αντί
   // για "Εξαντλημένο" (πραγματικό/μόνιμο μηδέν) — βλ. lib/stockTiers.js.
   const { heldVariantIds, heldProductIds } = useActiveStockHolds(tenantId)
+  useNow(20000) // βλ. hooks/useNow.js -- ίδιος λόγος όπως ProductOverviewRoute.jsx
 
   // Η επαναφορά ποσότητας/μεγέθους γίνεται πλέον με remount: ο caller δίνει
   // key={product.id}, οπότε το state ξεκινά καθαρό σε κάθε προϊόν.
@@ -44,13 +46,17 @@ export default function ProductQuickShop({
   // για πλήρες σχόλιο, ίδια ακριβώς λογική εδώ.
   const hasVariants = Boolean(product.product_variants?.length)
 
+  // 20/9, ρητό αίτημα χρήστη: ίδιο "προγραμματισμένη διαθεσιμότητα" gate
+  // με ProductOverviewRoute.jsx -- βλ. πλήρες σχόλιο εκεί.
+  const isScheduled = isScheduledUnavailable(product)
+
   const maxByVariant = {}
   if (hasVariants) {
     for (const variant of product.product_variants) {
       const existingCartQty =
         cartItems.find((i) => i.product.id === product.id && i.variant?.id === variant.id)
           ?.quantity ?? 0
-      maxByVariant[variant.id] = Math.max(0, variant.stock_quantity - existingCartQty)
+      maxByVariant[variant.id] = isScheduled ? 0 : Math.max(0, variant.stock_quantity - existingCartQty)
     }
   }
 
@@ -61,9 +67,11 @@ export default function ProductQuickShop({
     ? (cartItems.find((i) => i.product.id === product.id && !i.variant)?.quantity ?? 0)
     : 0
   const simpleMaxAddable = !hasVariants
-    ? product.stock_quantity != null
-      ? Math.max(0, product.stock_quantity - simpleExistingCartQty)
-      : Infinity
+    ? isScheduled
+      ? 0
+      : product.stock_quantity != null
+        ? Math.max(0, product.stock_quantity - simpleExistingCartQty)
+        : Infinity
     : 0
   const effectiveQuantity = Math.min(quantity, Math.max(0, simpleMaxAddable))
   const isSoldOut = !hasVariants && simpleMaxAddable <= 0
@@ -123,6 +131,7 @@ export default function ProductQuickShop({
                         maxByVariant={maxByVariant}
                         onChangeQuantity={handleChangeQuantity}
                         heldVariantIds={heldVariantIds}
+                        scheduledFrom={product.available_from}
                       />
                       {hasVariants && !hasSizeSelection && (
                         <p className="mt-2 text-xs text-gray-500">
@@ -141,6 +150,7 @@ export default function ProductQuickShop({
                         quantity={getTotalStock(product)}
                         className="mb-3"
                         hasActiveHold={heldProductIds.has(product.id)}
+                        scheduledFrom={product.available_from}
                       />
                       <div className="text-sm font-medium text-gray-900">Ποσότητα</div>
                       <div className="mt-2 flex items-center gap-3">
@@ -166,9 +176,11 @@ export default function ProductQuickShop({
                       </div>
                       {isSoldOut ? (
                         <p className="mt-1 text-xs text-gray-500">
-                          {simpleExistingCartQty > 0
-                            ? "Έχεις ήδη όλη τη διαθέσιμη ποσότητα στο καλάθι σου."
-                            : "Εξαντλημένο."}
+                          {isScheduled
+                            ? "Θα είναι διαθέσιμο σύντομα -- δες παραπάνω πότε."
+                            : simpleExistingCartQty > 0
+                              ? "Έχεις ήδη όλη τη διαθέσιμη ποσότητα στο καλάθι σου."
+                              : "Εξαντλημένο."}
                         </p>
                       ) : (
                         effectiveQuantity === 0 && (

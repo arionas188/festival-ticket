@@ -22,7 +22,14 @@ export function useMerchCategories(tenantId) {
       {
         key: "new",
         title: "New Arrivals",
-        items: all.filter((p) => new Date(p.created_at).getTime() >= NEW_ARRIVAL_CUTOFF),
+        // 20/9, ρητό αίτημα χρήστη: εκτός από το αυτόματο "μέσα στους
+        // τελευταίους 6 μήνες", ο admin μπορεί τώρα να το τσεκάρει
+        // χειροκίνητα (products.is_new_arrival, βλ. ProductFormPage.jsx) —
+        // π.χ. για κάτι που καταχωρήθηκε στο σύστημα νωρίτερα αλλά θέλει
+        // να δείχνει ως "καινούριο" όταν ανοίξει η πώλησή του.
+        items: all.filter(
+          (p) => p.is_new_arrival || new Date(p.created_at).getTime() >= NEW_ARRIVAL_CUTOFF
+        ),
       },
       {
         key: "clothing",

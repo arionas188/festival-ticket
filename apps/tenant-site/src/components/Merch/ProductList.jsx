@@ -1,11 +1,14 @@
 import { HeartIcon, ShareIcon, ShoppingCartIcon } from "@heroicons/react/24/outline"
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid"
+import { PencilIcon } from "@heroicons/react/20/solid"
 import { Link, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 import { useActiveStockHolds } from "../../queries/useActiveStockHolds"
+import { useNow } from "../../hooks/useNow"
 import StockBadge from "./StockBadge"
+import DeleteProductDialog from "./DeleteProductDialog"
 import { getCategoryLabel } from "../../lib/merchCategories"
 import { getTotalStock } from "../../lib/stockTiers"
 import { shareLink } from "../../lib/shareLink"
@@ -18,6 +21,7 @@ export default function ProductList({
   onRequireAuth,
   categoryKey,
   categoryLabel,
+  isAdmin = false,
 }) {
   const navigate = useNavigate()
   const { data: favoriteIds = [] } = useFavorites(fanId, tenantId)
@@ -25,6 +29,7 @@ export default function ProductList({
   // 19/9, ρητό αίτημα χρήστη: "Μη διαθέσιμο" (ενεργό hold, προσωρινό) αντί
   // για "Εξαντλημένο" (πραγματικό/μόνιμο μηδέν) — βλ. lib/stockTiers.js.
   const { heldProductIds } = useActiveStockHolds(tenantId)
+  useNow(20000) // βλ. hooks/useNow.js -- το StockBadge scheduledFrom χρειάζεται re-render με φρέσκια ώρα
 
   function handleToggleFavorite(e, productId) {
     e.stopPropagation()
@@ -125,6 +130,28 @@ export default function ProductList({
                     <HeartIcon className="size-5 text-gray-700" />
                   )}
                 </button>
+
+                {/* 20/9, ρητό αίτημα χρήστη — μολύβι επεξεργασίας + κόκκινος
+                    κάδος διαγραφής, ΜΟΝΟ για πραγματικούς tenant admins.
+                    Κάτω-αριστερά στην εικόνα (τα share/favorite είναι πάνω),
+                    ίδιο μοτίβο "grouped κουμπιά σε γωνία" με το EventsList.jsx.
+                    stopPropagation και στα δύο — η κάρτα έχει δικό της onClick
+                    πλοήγησης στο product overview, δεν πρέπει να πυροδοτηθεί
+                    μαζί (DeleteProductDialog το κάνει ήδη μόνο του). */}
+                {isAdmin && (
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1.5">
+                    <Link
+                      to={`/merch/product/${product.slug}/edit`}
+                      onClick={(e) => e.stopPropagation()}
+                      title="Επεξεργασία προϊόντος"
+                      aria-label="Επεξεργασία προϊόντος"
+                      className="flex size-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
+                    >
+                      <PencilIcon aria-hidden="true" className="size-4" />
+                    </Link>
+                    <DeleteProductDialog product={product} tenantId={tenantId} />
+                  </div>
+                )}
               </div>
 
               <div className="mt-4 flex justify-between">
@@ -147,6 +174,7 @@ export default function ProductList({
                 className="mt-2"
                 showCount={false}
                 hasActiveHold={heldProductIds.has(product.id)}
+                scheduledFrom={product.available_from}
               />
 
               {/* stopPropagation: το κλικ εδώ πρέπει να πάει ΜΟΝΟ στο

@@ -1,17 +1,20 @@
 import { useState } from "react"
-import { Navigate, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom"
+import { Link, Navigate, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom"
 import { HeartIcon, ShareIcon } from "@heroicons/react/24/outline"
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid"
+import { PencilIcon } from "@heroicons/react/20/solid"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import StockBadge from "./StockBadge"
-import { getTotalStock } from "../../lib/stockTiers"
+import { getTotalStock, isScheduledUnavailable } from "../../lib/stockTiers"
 import { useActiveStockHolds } from "../../queries/useActiveStockHolds"
+import { useNow } from "../../hooks/useNow"
 import { getCategoryLabel } from "../../lib/merchCategories"
 import { shareLink } from "../../lib/shareLink"
 import MerchBreadcrumb from "./MerchBreadcrumb"
 import SizeSelector from "./SizeSelector"
+import DeleteProductDialog from "./DeleteProductDialog"
 import { useProducts } from "../../queries/useProducts"
 import { useCart } from "../../queries/useCart"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
@@ -54,6 +57,7 @@ export default function ProductOverviewRoute() {
   // 19/9, ρητό αίτημα χρήστη: "Μη διαθέσιμο" (ενεργό hold, προσωρινό) αντί
   // για "Εξαντλημένο" (πραγματικό/μόνιμο μηδέν) — βλ. lib/stockTiers.js.
   const { heldVariantIds, heldProductIds } = useActiveStockHolds(context.tenantId)
+  useNow(20000) // βλ. hooks/useNow.js -- αναγκάζει re-render ώστε το isScheduledUnavailable() να ξαναδιαβάζει το ρολόι, μηδενικό extra network/DB κόστος
 
   // 15/9, ρητό αίτημα χρήστη (screenshots 2-4): αντί για ΕΝΑ επιλεγμένο
   // μέγεθος + μία κοινή ποσότητα, ο fan μπορεί τώρα να βάλει ποσότητα σε
@@ -104,13 +108,21 @@ export default function ProductOverviewRoute() {
   // μέγεθος) — ΟΧΙ το αθροιστικό product.stock_quantity, αλλιώς θα
   // επέτρεπε π.χ. 8 Small ενώ υπάρχουν μόνο 2 Small σε προϊόν με σύνολο 15
   // σε όλα τα μεγέθη μαζί.
+  // 20/9, ρητό αίτημα χρήστη: όσο products.available_from είναι στο
+  // μέλλον, το πραγματικό stock υπάρχει ήδη στη βάση αλλά ΔΕΝ μπορεί να
+  // προστεθεί στο καλάθι ακόμα -- το "πόσο χωράει" μηδενίζεται εδώ, στο
+  // ΙΔΙΟ σημείο που ήδη υπολογίζει το πραγματικό όριο (καμία διπλή
+  // λογική). Η ένδειξη ("Διαθέσιμο από ...") έρχεται από το StockBadge/
+  // SizeSelector παρακάτω, βλ. lib/stockTiers.js.
+  const isScheduled = isScheduledUnavailable(product)
+
   const maxByVariant = {}
   if (hasVariants) {
     for (const variant of product.product_variants) {
       const existingCartQty =
         cartItems.find((i) => i.product.id === product.id && i.variant?.id === variant.id)
           ?.quantity ?? 0
-      maxByVariant[variant.id] = Math.max(0, variant.stock_quantity - existingCartQty)
+      maxByVariant[variant.id] = isScheduled ? 0 : Math.max(0, variant.stock_quantity - existingCartQty)
     }
   }
 
@@ -123,9 +135,11 @@ export default function ProductOverviewRoute() {
     ? (cartItems.find((i) => i.product.id === product.id && !i.variant)?.quantity ?? 0)
     : 0
   const simpleMaxAddable = !hasVariants
-    ? product.stock_quantity != null
-      ? Math.max(0, product.stock_quantity - simpleExistingCartQty)
-      : Infinity
+    ? isScheduled
+      ? 0
+      : product.stock_quantity != null
+        ? Math.max(0, product.stock_quantity - simpleExistingCartQty)
+        : Infinity
     : 0
   const effectiveSimpleQuantity = Math.min(simpleQuantity, Math.max(0, simpleMaxAddable))
   const isSoldOut = !hasVariants && simpleMaxAddable <= 0
@@ -286,6 +300,7 @@ export default function ProductOverviewRoute() {
               quantity={getTotalStock(product)}
               className="mt-3"
               hasActiveHold={heldProductIds.has(product.id)}
+              scheduledFrom={product.available_from}
             />
 
             {product.description && (
@@ -315,6 +330,7 @@ export default function ProductOverviewRoute() {
                   maxByVariant={maxByVariant}
                   onChangeQuantity={handleChangeQuantity}
                   heldVariantIds={heldVariantIds}
+                  scheduledFrom={product.available_from}
                 />
                 {hasVariants && !hasSizeSelection && (
                   <p className="mt-2 text-xs text-gray-500">
@@ -409,6 +425,26 @@ export default function ProductOverviewRoute() {
               >
                 <ShareIcon className="size-5" />
               </Button>
+              {/* 20/9, ρητό αίτημα χρήστη — επεξεργασία/διαγραφή ΚΑΙ από την
+                  ίδια τη σελίδα του προϊόντος (όχι μόνο από την κάρτα στο
+                  grid, βλ. ProductList.jsx), ΜΟΝΟ για πραγματικούς tenant
+                  admins. Ίδιο "outline icon button" στυλ με τα favorite/share
+                  διπλανά, ώστε να μη ξεχωρίζει σαν ξένο σώμα σε αυτή τη
+                  σειρά — αυτό ζήτησε ρητά ο χρήστης ("style όπως αυτό που
+                  έχουμε στο product"). */}
+              {context.isAdmin && (
+                <>
+                  <Button type="button" variant="outline" size="icon" asChild>
+                    <Link
+                      to={`/merch/product/${product.slug}/edit`}
+                      aria-label="Επεξεργασία προϊόντος"
+                    >
+                      <PencilIcon className="size-5" />
+                    </Link>
+                  </Button>
+                  <DeleteProductDialog product={product} tenantId={context.tenantId} />
+                </>
+              )}
             </div>
             {/* 15/9, ρητό αίτημα χρήστη (screenshot 5): "Ολοκλήρωση
                 παραγγελίας" δίπλα στην ήδη υπάρχουσα σειρά — προσθέτει την

@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom"
+import { PlusIcon } from "@heroicons/react/20/solid"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 
 // Πραγματικά <Link> αντί για button+onClick: right-click/"open in new tab"
@@ -6,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 // 15/9: το breadcrumb ΔΕΝ μπαίνει πια εδώ μέσα — μετακόμισε ένα επίπεδο πιο
 // πάνω, στο MerchCategoriesRoute.jsx, ΠΡΙΝ από το bg-gray-50 div (ρητό
 // αίτημα χρήστη: "πάνω από το γκρι, κάτω από τη γραμμή" — βλ. εκεί).
-export default function CategoryGrid({ categories }) {
+export default function CategoryGrid({ categories, isAdmin = false }) {
   const newArrivals = categories.find((c) => c.key === "new")
   const rest = categories.filter((c) => c.key !== "new")
 
@@ -19,6 +21,23 @@ export default function CategoryGrid({ categories }) {
         <h2 className="border-b border-gray-200 pb-4 text-center text-2xl font-bold tracking-tight text-gray-900">
           Κατηγορίες
         </h2>
+
+        {/* 20/9, ρητό αίτημα χρήστη — "widget ... πρόσθεσε product",
+            ορατό ΜΟΝΟ σε πραγματικούς admins αυτού του tenant (context.isAdmin,
+            βλ. MerchCategoriesRoute.jsx). Ίδιο ΑΚΡΙΒΩΣ μοτίβο θέσης/στυλ με
+            το "Προσθήκη event" στο EventsRoute.jsx — δεξιά, πάνω από το
+            περιεχόμενο. Πηγαίνει σε πραγματική σελίδα (merch/product/new,
+            βλ. main.jsx + ProductFormPage.jsx), όχι modal. */}
+        {isAdmin && (
+          <div className="mt-4 flex justify-end">
+            <Button asChild className="rounded-full">
+              <Link to="/merch/product/new">
+                <PlusIcon aria-hidden="true" className="mr-1.5 size-4" />
+                Πρόσθεσε προϊόν
+              </Link>
+            </Button>
+          </div>
+        )}
 
         <div className="mt-8 flex flex-col gap-6 lg:gap-8">
           {/* New Arrivals — κοντό σε mobile, πλατύ banner από sm και πάνω.

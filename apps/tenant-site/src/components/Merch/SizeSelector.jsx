@@ -17,12 +17,17 @@ const SIZE_ORDER = ["S", "M", "L", "XL"]
 // μηδέν του εξηγείται από ενεργό hold", άρα "Μη διαθέσιμο" αντί για
 // "Εξαντλημένο" (βλ. lib/stockTiers.js). Default άδειο Set — καμία αλλαγή
 // συμπεριφοράς σε caller που δεν το περνάει.
+// 20/9, ρητό αίτημα χρήστη: προαιρετικό scheduledFrom (products.available_from)
+// -- όταν είναι στο μέλλον, ΚΑΘΕ pill μεγέθους δείχνει "Διαθέσιμο από ..."
+// αντί για το κανονικό tier του, ίδιο σημείο αλήθειας με το StockBadge
+// (lib/stockTiers.js). Default null -- καμία αλλαγή όπου δεν περνιέται.
 export default function SizeSelector({
   variants,
   quantities,
   maxByVariant,
   onChangeQuantity,
   heldVariantIds = new Set(),
+  scheduledFrom = null,
 }) {
   // Δεν επινοούμε μεγέθη — αν το προϊόν δεν έχει ακόμα καμία γραμμή
   // product_variants στη βάση (π.χ. παλιό προϊόν πριν το backfill), το
@@ -42,7 +47,7 @@ export default function SizeSelector({
   return (
     <div className="mt-2 flex flex-col gap-1.5">
       {sorted.map((variant) => {
-        const tier = getStockTier(variant.stock_quantity, heldVariantIds.has(variant.id))
+        const tier = getStockTier(variant.stock_quantity, heldVariantIds.has(variant.id), scheduledFrom)
         const isOutOfStock = variant.stock_quantity <= 0
         const qty = quantities[variant.id] ?? 0
         const max = maxByVariant[variant.id] ?? 0

@@ -43,7 +43,7 @@ export default function MerchCategoriesRoute() {
           (ρητό αίτημα χρήστη — "δεν χρειάζεται", αυτή η σελίδα δεν έχει
           λίστα προϊόντων προς φιλτράρισμα, μόνο κατηγορίες). */}
       <div className="bg-white">
-        <CategoryGrid categories={categories} />
+        <CategoryGrid categories={categories} isAdmin={context.isAdmin} />
 
         <Outlet context={context} />
       </div>

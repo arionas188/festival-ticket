@@ -123,6 +123,7 @@ export default function MerchCategoryRoute() {
                 onRequireAuth={context.onRequireAuth}
                 categoryKey={category.key}
                 categoryLabel={category.title}
+                isAdmin={context.isAdmin}
               />
             </div>
           </div>

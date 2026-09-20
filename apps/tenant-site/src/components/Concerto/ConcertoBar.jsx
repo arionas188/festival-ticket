@@ -76,8 +76,35 @@ export default function ConcertoBar({ authOpen, onAuthOpenChange }) {
   const { data: fanAccount } = useFanAccount(isLoggedIn ? user?.id : null)
   const profileNeedsReview = isLoggedIn && fanAccount?.profile_customized !== true
 
+  // 20/9 fix (ρητή αναφορά χρήστη, screenshot bug — MerchBreadcrumb
+  // ΔΕΝ πατιόταν όταν ήταν scrolled/sticky): αυτό το <header> είναι
+  // "fixed inset-x-0" -- η ΚΟΥΤΙ-ΟΡΙΟΘΕΤΗΣΗ του (bounding box) καλύπτει
+  // ΟΛΟ το πλάτος της οθόνης σε μια οριζόντια λωρίδα (top-4 μέχρι το
+  // ύψος του logo/avatar), ΑΚΟΜΑ κι εκεί που δεν υπάρχει ορατό
+  // περιεχόμενο (π.χ. το κενό ανάμεσα σε logo και avatar, justify-
+  // between) -- ένα στοιχείο χωρίς pointer-events-none δέχεται clicks
+  // σε ΟΛΟ του το κουτί, ακόμα κι αν είναι οπτικά διάφανο εκεί. Το
+  // MerchBreadcrumb.jsx (sticky top-0 z-20) είναι ΧΑΜΗΛΟΤΕΡΟ z-index
+  // (40 > 20) -- όταν ο χρήστης κάνει scroll αρκετά ώστε το sticky
+  // breadcrumb να "κολλήσει" στο top-0 και να μπει μέσα σε αυτή τη
+  // λωρίδα, το ΑΟΡΑΤΟ header ΕΔΩ έκλεβε το click πριν προλάβει να
+  // φτάσει στο breadcrumb από κάτω -- γι' αυτό δούλευε μόνο στην
+  // αρχική θέση της σελίδας (όπου δεν υπάρχει ακόμα overlap).
+  // Επιβεβαιωμένο via git log ότι ΟΥΤΕ αυτό το αρχείο ΟΥΤΕ το
+  // MerchBreadcrumb.jsx αγγίχτηκαν στην ίδια/προηγούμενη αλλαγή --
+  // προϋπήρχε, απλά δεν είχε φανεί ακόμα.
+  // Fix: pointer-events-none σε ΟΛΟ το <header> (σταματάει να
+  // "πιάνει" clicks στις διάφανες περιοχές του), + pointer-events-auto
+  // ρητά ΜΟΝΟ στα δύο πραγματικά interactive στοιχεία μέσα του (avatar
+  // trigger button / κουμπί "Σύνδεση") ώστε αυτά να συνεχίσουν να
+  // δουλεύουν κανονικά. Το ConcertoLogo δεν χρειάζεται pointer-events-
+  // auto -- δεν είναι clickable ούτε πριν (ConcertoLogo.jsx, καθαρά
+  // decorative div). Τα δύο Dialog (ConcertoAuthDialog/
+  // DeleteAccountDialog) και το DropdownMenuContent ΔΕΝ επηρεάζονται
+  // καθόλου -- Radix τα κάνει portal σε document.body, εκτός του
+  // <header> subtree, άρα δεν κληρονομούν το pointer-events-none.
   return (
-    <header className="fixed inset-x-0 top-4 z-40">
+    <header className="pointer-events-none fixed inset-x-0 top-4 z-40">
       <div className="w-full px-4 sm:mx-auto sm:w-2/3 sm:pl-0">
         <div className="flex w-full items-center justify-between">
           <ConcertoLogo size={48} />
@@ -87,7 +114,7 @@ export default function ConcertoBar({ authOpen, onAuthOpenChange }) {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-background/70 shadow-md backdrop-blur-lg"
+                  className="pointer-events-auto relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-background/70 shadow-md backdrop-blur-lg"
                 >
                   {avatarUrl ? (
                     <img
@@ -137,7 +164,7 @@ export default function ConcertoBar({ authOpen, onAuthOpenChange }) {
             <Button
               type="button"
               onClick={() => onAuthOpenChange(true)}
-              className="shrink-0 rounded-full border border-border bg-background/70 px-3 py-1.5 text-xs font-semibold text-foreground shadow-md backdrop-blur-lg hover:bg-background/90"
+              className="pointer-events-auto shrink-0 rounded-full border border-border bg-background/70 px-3 py-1.5 text-xs font-semibold text-foreground shadow-md backdrop-blur-lg hover:bg-background/90"
             >
               Σύνδεση
             </Button>

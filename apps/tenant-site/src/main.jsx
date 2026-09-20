@@ -12,6 +12,7 @@ import ProductModalRoute from './components/Merch/ProductModalRoute.jsx'
 import OrderSummaryRoute from './components/Merch/OrderSummaryRoute.jsx'
 import CartRoute from './components/Merch/CartRoute.jsx'
 import ProductOverviewRoute from './components/Merch/ProductOverviewRoute.jsx'
+import ProductFormRoute from './components/Merch/ProductFormRoute.jsx'
 import EventsRoute from './components/Events/EventsRoute.jsx'
 import EventFormRoute from './components/Events/EventFormRoute.jsx'
 import EventModalRoute from './components/Events/EventModalRoute.jsx'
@@ -95,6 +96,17 @@ const router = createBrowserRouter([
           // sibling, ίδιο μοτίβο με merch/order/:orderId — πραγματική σελίδα
           // προϊόντος, ξεχωριστή από το merch/product/:productId modal
           // ("Γρήγορη αγορά", ΠΑΡΑΜΕΝΕΙ όπως είναι, δεν αγγίχτηκε).
+          // merch/product/new + merch/product/:productId/edit (20/9, ρητό
+          // αίτημα χρήστη — "Πρόσθεσε προϊόν" widget στο Merch Store):
+          // ΕΠΙΠΕΔΑ (flat) siblings, ΙΔΙΟ ΑΚΡΙΒΩΣ μοτίβο με
+          // events/event/new + events/event/:eventId/edit παρακάτω —
+          // αντικαθιστούν εντελώς τη σελίδα αντί να κάθονται πάνω της.
+          // Στατικό segment "new" έχει πάντα προτεραιότητα έναντι του
+          // dynamic ":productId" στο ΙΔΙΟ βάθος (React Router route
+          // ranking) — καμία σύγκρουση με το ήδη υπάρχον nested
+          // 'product/:productId' (Γρήγορη αγορά modal, από πάνω).
+          { path: 'merch/product/new', element: <ProductFormRoute /> },
+          { path: 'merch/product/:productId/edit', element: <ProductFormRoute /> },
           { path: 'merch/overview/:productId', element: <ProductOverviewRoute /> },
           // /events → λίστα events. Το event είναι child route, οπότε το TicketDialog
           // modal κάθεται πάνω στη λίστα χωρίς κόλπα με location state.

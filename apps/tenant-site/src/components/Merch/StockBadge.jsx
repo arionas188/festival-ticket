@@ -20,12 +20,25 @@ import { getStockTier } from "../../lib/stockTiers"
 // useActiveStockHolds.js) -- όταν quantity <= 0 ΚΑΙ hasActiveHold=true,
 // δείχνει "Μη διαθέσιμο" αντί για "Εξαντλημένο" (βλ. lib/stockTiers.js).
 // Default false -- καμία αλλαγή συμπεριφοράς όπου δεν περάσαμε ρητά true.
-export default function StockBadge({ quantity, className, showCount = true, hasActiveHold = false }) {
+// 20/9, ρητό αίτημα χρήστη: νέο προαιρετικό scheduledFrom
+// (products.available_from) -- όταν είναι στο μέλλον, δείχνει "Διαθέσιμο
+// από ..." αντί για το κανονικό stock tier, ΑΝΕΞΑΡΤΗΤΑ από quantity/hold
+// (βλ. lib/stockTiers.js). Default null -- καμία αλλαγή συμπεριφοράς όπου
+// δεν το περάσαμε.
+export default function StockBadge({
+  quantity,
+  className,
+  showCount = true,
+  hasActiveHold = false,
+  scheduledFrom = null,
+}) {
   // Προϊόν χωρίς tracked stock (null/undefined) — δεν εμφανίζουμε τίποτα,
-  // δεν έχουμε πραγματικό δεδομένο για να δείξουμε.
-  if (quantity == null) return null
+  // δεν έχουμε πραγματικό δεδομένο για να δείξουμε. Εξαίρεση: scheduledFrom
+  // στο μέλλον -- έχει νόημα να το δείξουμε ΑΚΟΜΑ κι αν η quantity είναι
+  // null/0, το μήνυμα δεν εξαρτάται από αυτήν.
+  if (quantity == null && !scheduledFrom) return null
 
-  const tier = getStockTier(quantity, hasActiveHold)
+  const tier = getStockTier(quantity, hasActiveHold, scheduledFrom)
 
   return (
     <span

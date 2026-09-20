@@ -2649,6 +2649,197 @@ hold, ποτέ πραγματική πώληση.
 
 `npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1).
 
+## 20/9 — bug: sticky MerchBreadcrumb δεν πατιόταν σε scroll (κάτω από ConcertoBar)
+
+Ρητή αναφορά χρήστη (screenshots): στη σελίδα κατηγορίας merch ("New
+Arrivals"), όταν ο χρήστης είχε κάνει scroll αρκετά κάτω ώστε το sticky
+breadcrumb pill να "κολλήσει" στην κορυφή, το πάτημα πάνω στο "Merch
+Store" (για επιστροφή στις κατηγορίες) δεν δούλευε καθόλου -- μόνο αν
+γύριζε πίσω στην αρχική θέση της σελίδας. Ο χρήστης ρητά ζήτησε
+επιβεβαίωση ότι δεν χάλασε κάτι από πρόσφατη αλλαγή αυτής της
+συνεδρίας.
+
+**Επιβεβαιώθηκε via `git log`** ότι ΟΥΤΕ το `ConcertoBar.jsx` ΟΥΤΕ το
+`MerchBreadcrumb.jsx` είχαν αγγιχτεί στη σημερινή συνεδρία -- προϋπήρχε
+από το redesign του `ConcertoBar.jsx` σε προηγούμενη συνεδρία (commit
+`f71845b`), απλά δεν είχε φανεί μέχρι τώρα (χρειάζεται συγκεκριμένο
+συνδυασμό scroll + merch σελίδα).
+
+**Αιτία:** το `ConcertoBar.jsx` είναι `fixed inset-x-0 top-4 z-40` --
+καλύπτει ΟΛΟ το πλάτος της οθόνης σε μια λωρίδα, ΑΚΟΜΑ και στις διάφανες
+περιοχές του (π.χ. το κενό logo<->avatar). Το `MerchBreadcrumb.jsx` είναι
+`sticky top-0 z-20` -- χαμηλότερο z-index. Μόλις το sticky breadcrumb
+"κολλήσει" στην κορυφή και μπει στην ίδια λωρίδα με το ConcertoBar, το
+ConcertoBar (z-40 > z-20) έκλεβε το click πριν φτάσει στο breadcrumb από
+κάτω.
+
+**Fix** (`ConcertoBar.jsx` μόνο, ΚΑΜΙΑ αλλαγή στο `MerchBreadcrumb.jsx`):
+`pointer-events-none` σε όλο το `<header>` + `pointer-events-auto` ρητά
+ΜΟΝΟ στα δύο πραγματικά interactive στοιχεία μέσα του (avatar/κουμπί
+λογαριασμού, κουμπί "Σύνδεση"). Το `ConcertoAuthDialog`/
+`DeleteAccountDialog`/`DropdownMenuContent` δεν επηρεάζονται -- Radix τα
+κάνει portal σε `document.body`, εκτός του `<header>` subtree.
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19/1).
+
+## 20/9 — "Πρόσθεσε προϊόν": ο tenant admin προσθέτει/επεξεργάζεται/διαγράφει merch προϊόντα από το ίδιο το site
+
+Ρητό αίτημα χρήστη: μέχρι τώρα κάθε νέο merch προϊόν έμπαινε χειροκίνητα
+μέσα από το Supabase table editor. Νέο κουμπί "Πρόσθεσε προϊόν" στο Merch
+Store (`CategoryGrid.jsx`, ΜΟΝΟ σε `isAdmin` -- ίδιο ΑΚΡΙΒΩΣ μοτίβο/θέση
+με το ήδη υπάρχον "Προσθήκη event" στο `EventsRoute.jsx`) ανοίγει
+πραγματική σελίδα (`merch/product/new`, flat sibling route -- ίδιο μοτίβο
+με `events/event/new`) με πλήρη φόρμα: όνομα, περιγραφή, κατηγορία
+(Ρουχισμός/CD & Βινύλια/Διάφορα -- ΟΧΙ "New Arrivals", αυτό υπολογίζεται
+αυτόματα από `created_at`, δεν είναι πραγματική επιλέξιμη κατηγορία),
+τιμή, απόθεμα (απλό νούμερο, ή γραμμές ανά μέγεθος S/M/L/XL για
+"Ρουχισμός" -- ίδιο μοτίβο με τα `tickets` field-array στο
+`EventFormPage.jsx`), πολλαπλές φωτογραφίες.
+
+Επεξεργασία: `merch/product/:productId/edit` (ίδιο component,
+`ProductFormPage.jsx`, με `product` prop). Διαγραφή: κόκκινος κάδος
+(`DeleteProductDialog.jsx`, modal επιβεβαίωσης) ΚΑΙ πάνω σε κάθε κάρτα
+προϊόντος στο grid (`ProductList.jsx`, κάτω-αριστερά στην εικόνα, μαζί με
+μολύβι επεξεργασίας) ΚΑΙ μέσα στην ίδια τη σελίδα προϊόντος
+(`ProductOverviewRoute.jsx`, δίπλα σε favorite/share -- ρητό αίτημα
+χρήστη "και τα δύο").
+
+**Ασφάλεια** (migration `20260920080000_add_products_admin_write.sql`,
+ΙΔΙΟ ΑΚΡΙΒΩΣ μηχανισμό με events/tickets): RLS insert/update/delete στο
+`products` + `product_variants`, μόνο για πραγματικό admin ΤΟΥ
+συγκεκριμένου tenant (`tenant_admins`). Route guard (`ProductFormRoute.jsx`)
+επιπλέον, για UX -- η πραγματική ασφάλεια είναι πάντα το RLS.
+
+**Εικόνες:** ΚΑΝΕΝΑ νέο storage bucket -- ξαναχρησιμοποιεί το ήδη
+υπάρχον `tenant-images` bucket με path `<tenant_id>/products/...` (η
+storage RLS εκεί ελέγχει μόνο το πρώτο folder = tenant_id, δουλεύει ήδη
+σωστά για οποιοδήποτε sub-path).
+
+**Slug:** ΚΑΘΟΛΟΥ δεν στέλνεται από το frontend -- υπάρχει ήδη αυτόματο
+DB trigger (`set_product_slug`, migration `20260906075738`) που το
+παράγει από το `name`, με μοναδικότητα ανά tenant.
+
+**Διαγραφή προϊόντος με ήδη υπάρχουσες παραγγελίες:** ΔΕΝ διαγράφουμε
+ποτέ σιωπηλά `order_items` (ιστορικό παραγγελιών/τιμών). Το
+`useDeleteProduct.js` σβήνει μόνο `cart_items` (ενεργά καλάθια, ασφαλές)
+πριν το `products` -- αν υπάρχουν ήδη `order_items`, το DELETE στο
+`products` αποτυγχάνει (foreign key, code `23503`) και το
+`DeleteProductDialog.jsx` δείχνει φιλικό μήνυμα αντί για το ωμό Postgres
+error. `product_variants` φεύγουν αυτόματα (`on delete cascade`, ήδη
+υπήρχε).
+
+⚠️ **Να τρέξει το migration `20260920080000_add_products_admin_write.sql`
+στο Supabase SQL editor** πριν δοκιμαστεί το νέο "Πρόσθεσε προϊόν" -- χωρίς
+αυτό, κάθε insert/update/delete θα αποτυγχάνει σιωπηλά λόγω RLS (καμία
+write policy δεν υπήρχε πριν σε products/product_variants).
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19 errors/1 warning βάση +
+1 ακόμα warning, ίδιας ακριβώς φύσης με το ήδη υπάρχον στο
+`EventFormPage.jsx` line 495 -- `watch()` μέσα σε per-row Combobox, το
+React Compiler προειδοποιεί σε ΚΑΘΕ τέτοια χρήση σε όλο το project, όχι
+κάτι νέο/σπασμένο).
+
+## 20/9 — "Πρόσθεσε προϊόν" #2: χειροκίνητο New Arrivals + προγραμματισμένη διαθεσιμότητα
+
+Ρητό αίτημα χρήστη, δύο ακόμα επιλογές μέσα στη φόρμα προϊόντος
+(`ProductFormPage.jsx`):
+
+**1) "Να εμφανίζεται και στα New Arrivals"** — checkbox, νέα στήλη
+`products.is_new_arrival` (boolean, default false). Μέχρι τώρα το "New
+Arrivals" ήταν ΑΠΟΚΛΕΙΣΤΙΚΑ αυτόματο (`created_at` μέσα στους τελευταίους
+6 μήνες, `hooks/useMerchCategories.js`) — τώρα ο admin μπορεί να το
+τσεκάρει χειροκίνητα, ανεξάρτητα από πότε καταχωρήθηκε πραγματικά. Filter
+έγινε `p.is_new_arrival || <παλιά συνθήκη ημερομηνίας>` — πλήρως backward
+compatible, όλα τα ήδη υπάρχοντα προϊόντα έχουν `is_new_arrival=false`.
+
+**2) Προγραμματισμένη διαθεσιμότητα** — νέα στήλη
+`products.available_from` (timestamptz, nullable — NULL = διαθέσιμο
+αμέσως, όπως σήμερα, καμία αλλαγή για ήδη υπάρχοντα προϊόντα). Ο admin
+μπορεί να καταχωρήσει το προϊόν ΜΕ τις πραγματικές του ποσότητες πριν
+"ανοίξει" η πώληση — ρητή απαίτηση χρήστη: **"να εμφανίζεται κανονικά"**
+το προϊόν στο κατάστημα από τώρα (ΔΕΝ κρύβεται), αλλά να μην μπορεί να
+μπει στο καλάθι μέχρι εκείνη την ημερομηνία/ώρα, και **"να αλλάζει
+αυτόματα... να μην ξανασχολείται ο admin"** μόλις περάσει.
+
+**Σκόπιμα ΚΑΜΙΑ server-side/cron λογική εδώ** — ούτε δεύτερο pg_cron
+job, ούτε boolean flag που κάτι πρέπει να "γυρίσει" τη σωστή στιγμή. Το
+ίδιο το session είχε ήδη δείξει (bug `20260919091000`, το κενό ~60 δευτ.
+ανάμεσα σε `expires_at` και το επόμενο cron tick) ότι stored state που
+πρέπει να "προλάβει" ρολόι είναι εύθραυστο. Αντ' αυτού: η διαθεσιμότητα
+υπολογίζεται ΖΩΝΤΑΝΑ σε κάθε render/refetch
+(`lib/stockTiers.js#isScheduledUnavailable`: `available_from` vs
+`Date.now()`) — το ήδη υπάρχον `refetchInterval: 15000` στο
+`useProducts.js` κάνει το "αυτόματα" να δουλεύει μόνο του, μηδέν νέο
+background job.
+
+Νέο, τρίτο tier σε `getStockTier()` (μαζί με "Διαθέσιμα"/"Εξαντλημένο"/
+"Μη διαθέσιμο"): "Διαθέσιμο από [ημ/νία ώρα]" (μπλε, ΟΧΙ κόκκινο — δεν
+είναι sold out, υπάρχει πραγματικό απόθεμα), με απόλυτη προτεραιότητα
+έναντι quantity/hold. Εφαρμόζεται ΚΑΙ στο συνολικό badge ΚΑΙ σε κάθε
+pill μεγέθους (`SizeSelector.jsx`, νέο `scheduledFrom` prop) — όχι μόνο
+στην κορυφή της σελίδας. Gating του "πόσο χωράει να προστεθεί" γίνεται
+στο ΙΔΙΟ σημείο που ήδη υπολόγιζε το πραγματικό όριο
+(`simpleMaxAddable`/`maxByVariant`, σε `ProductOverviewRoute.jsx` ΚΑΙ
+`ProductQuickShop.jsx`) — μηδενίζεται όσο `isScheduledUnavailable`.
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19 errors baseline + 2
+warnings — ίδιας ακριβώς φύσης με το ήδη υπάρχον στο EventFormPage.jsx,
+τίποτα νέο/σπασμένο).
+
+⚠️ **Νέο migration να τρέξει στο Supabase SQL editor:**
+`20260920090000_add_products_scheduling.sql` (προσθέτει τις δύο στήλες,
+πλήρως backward compatible — καμία αλλαγή σε ήδη υπάρχοντα προϊόντα).
+
+## 20/9 — "Πρόσθεσε προϊόν" #3: 24ωρη ώρα + live αυτόματο refresh (χωρίς extra φόρτο)
+
+Δύο ρητά bug reports του χρήστη μετά από ζωντανό test του παραπάνω
+feature:
+
+**1) Ώρα σε 24ωρη μορφή, χωρίς AM/PM.** Το native
+`<input type="datetime-local">` στο `ProductFormPage.jsx` έδειχνε
+AM/PM ανάλογα με τις ρυθμίσεις browser/OS. Λύση: ΑΚΡΙΒΩΣ το ίδιο,
+ήδη δοκιμασμένο πρότυπο του `EventFormPage.jsx` — χωρισμός σε δύο
+ξεχωριστά πεδία, native `type="date"` (χωρίς πρόβλημα) + text input
+με `inputMode="numeric"`, `maxLength={5}`, αυτόματο `:` μετά το 2ο
+ψηφίο, και αυστηρό zod regex `^([01]\d|2[0-3]):[0-5]\d$` σαν τελικό
+δίχτυ ασφαλείας. Τα δύο πεδία (`available_date`/`available_time`)
+συνδυάζονται σε ISO timestamp ΜΟΝΟ κατά το submit
+(`new Date(\`${date}T${time}\`).toISOString()`), ακριβώς όπως τα
+events. Νέος έλεγχος στο `productFormSchema.js`
+(`superRefine`): αν συμπληρωθεί μόνο το ένα από τα δύο πεδία, error
+μήνυμα να συμπληρωθεί και το άλλο.
+
+**2) Χρειαζόταν χειροκίνητο refresh για να φανεί "διαθέσιμο".** Ρητό
+αίτημα χρήστη να εξεταστεί το κόστος πριν εφαρμοστεί λύση ("αν
+βαραίνουμε το app... πες μου για να πάρω την απόφαση εγώ"). Η
+πραγματική αιτία ΔΕΝ ήταν stale data — το `refetchInterval: 15000`
+στο `useProducts.js` έκανε ήδη σωστά refetch κάθε 15". Το πρόβλημα
+ήταν React Query's `structuralSharing`: όταν το refetch φέρνει
+ΑΚΡΙΒΩΣ τα ίδια τιμές (τίποτα δεν άλλαξε στη βάση, μόνο το ρολόι
+προχωράει), κρατάει το ΙΔΙΟ object reference για να αποφύγει άσκοπα
+re-renders — άρα τα components που υπολογίζουν
+`isScheduledUnavailable()` δεν ξανατρέχουν ποτέ τον υπολογισμό με
+φρέσκια ώρα, μέχρι να γίνει πλήρες mount (γι' αυτό το "δούλευε" μόνο
+με F5).
+
+Λύση: νέο `hooks/useNow.js` — ένα καθαρά τοπικό `setInterval` (κάθε
+20") που απλά αναγκάζει re-render στα components που το καλούν,
+ΧΩΡΙΣ καμία επιπλέον κλήση δικτύου/Supabase. Καλείται με `useNow(20000)`
+σε `ProductOverviewRoute.jsx`, `ProductQuickShop.jsx`,
+`ProductList.jsx` (όπου εμφανίζεται `scheduledFrom`-aware UI).
+**Μηδενικό επιπλέον φορτίο** — ούτε ένα extra query στη βάση, ούτε πιο
+συχνό polling· απλά ο ήδη υπάρχων μηχανισμός (15" refetch) συνδυάζεται
+τώρα με ένα local "τικ ρολογιού" που κάνει τα ήδη σωστά δεδομένα να
+ξαναδείχνονται σωστά χωρίς F5.
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19 errors baseline +
+2 warnings, ίδιας φύσης με πριν — το ένα νέο warning στο
+`ProductFormPage.jsx` είναι το ίδιο γνωστό "React Compiler +
+`watch()`" pattern που υπάρχει ήδη στο `EventFormPage.jsx`).
+
+Καμία νέα migration αυτόν τον γύρο — και οι δύο διορθώσεις είναι
+αμιγώς frontend, καμία αλλαγή σχήματος βάσης.
+
 ## Οδηγία προς AI assistant (Claude ή άλλο)
 
 > Λειτούργησε σαν senior SaaS architect. Μην αλλάζεις αποφάσεις που έχουν ήδη παρθεί (multi-tenant μοντέλο, fan ownership στο Concerto με κεντρικό auth, custom/dynamic ticket types, subscription-based tickets-per-event όριο, δομή Radix/shadcn στα UI components) χωρίς να αιτιολογήσεις ρητά γιατί. Όταν δίνεται reference component, ακολούθησε αυστηρά τη δομή του. Συνέχισε από τα "Επόμενα βήματα" παραπάνω.

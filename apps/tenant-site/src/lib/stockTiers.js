@@ -14,6 +14,36 @@
 // migration 20260919090100). Ίδιο interaction behavior με το "Εξαντλημένο"
 // (απενεργοποιημένο, δεν μπορεί να προστεθεί στο καλάθι) — αλλάζει ΜΟΝΟ η
 // ετικέτα/χρώμα, όχι η δυνατότητα αγοράς.
+// 20/9, ρητό αίτημα χρήστη: προγραμματισμένη διαθεσιμότητα ("θα είναι
+// διαθέσιμο από τότε") — ΤΡΙΤΟ, ξεχωριστό tier (ΟΧΙ "Εξαντλημένο", δεν
+// είναι σωστό μήνυμα — υπάρχει πραγματικό stock, απλά δεν έχει ακόμα
+// "ανοίξει"). Έχει ΠΑΝΤΑ προτεραιότητα έναντι quantity/hold — όσο η
+// ημερομηνία δεν έχει περάσει, δεν έχει σημασία πόσο απόθεμα υπάρχει.
+function formatScheduledDate(value) {
+  const d = new Date(value)
+  const datePart = d.toLocaleDateString("el-GR", { day: "numeric", month: "numeric", year: "numeric" })
+  const timePart = d.toLocaleTimeString("el-GR", { hour: "2-digit", minute: "2-digit" })
+  return `${datePart} ${timePart}`
+}
+
+function scheduledTier(scheduledFrom) {
+  const formatted = formatScheduledDate(scheduledFrom)
+  return {
+    className: "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20",
+    label: () => `Διαθέσιμο από ${formatted}`,
+    shortLabel: "Σύντομα διαθέσιμο",
+  }
+}
+
+// Βοηθητικό — χρησιμοποιείται ΚΑΙ εκτός badge (ProductOverviewRoute.jsx/
+// ProductQuickShop.jsx) για να μηδενίζει το "πόσο ακόμα χωράει να
+// προστεθεί στο καλάθι" όσο η ημερομηνία δεν έχει περάσει· ΚΑΘΟΛΟΥ
+// server-side state — υπολογίζεται ζωντανά σε κάθε render/refetch, βλ.
+// σχόλιο στο migration 20260920090000_add_products_scheduling.sql.
+export function isScheduledUnavailable(product) {
+  return !!product.available_from && new Date(product.available_from).getTime() > Date.now()
+}
+
 const TEMPORARILY_UNAVAILABLE_TIER = {
   className: "bg-gray-100 text-gray-600 ring-1 ring-inset ring-gray-500/20",
   label: () => "Μη διαθέσιμο",
@@ -53,9 +83,13 @@ const TIERS = [
 
 // 19/9: δεύτερη, προαιρετική παράμετρος — true όταν υπάρχει ενεργό hold
 // (βλ. useActiveStockHolds.js) που εξηγεί ένα μηδενικό/αρνητικό stock.
-// Όλα τα ήδη υπάρχοντα call sites (χωρίς 2ο όρισμα) συνεχίζουν να
-// δουλεύουν ΑΚΡΙΒΩΣ όπως πριν (hasActiveHold === undefined -> falsy).
-export function getStockTier(quantity, hasActiveHold = false) {
+// 20/9: τρίτη, προαιρετική παράμετρος — products.available_from (ή null),
+// βλ. scheduledTier παραπάνω. Όλα τα ήδη υπάρχοντα call sites (χωρίς 2ο/3ο
+// όρισμα) συνεχίζουν να δουλεύουν ΑΚΡΙΒΩΣ όπως πριν.
+export function getStockTier(quantity, hasActiveHold = false, scheduledFrom = null) {
+  if (scheduledFrom && new Date(scheduledFrom).getTime() > Date.now()) {
+    return scheduledTier(scheduledFrom)
+  }
   if (quantity <= 0) {
     return hasActiveHold ? TEMPORARILY_UNAVAILABLE_TIER : OUT_OF_STOCK_TIER
   }
