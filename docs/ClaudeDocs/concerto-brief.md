@@ -3034,3 +3034,110 @@ Netlify bandwidth), όχι προληπτικά.
 > Λειτούργησε σαν senior SaaS architect. Μην αλλάζεις αποφάσεις που έχουν ήδη παρθεί (multi-tenant μοντέλο, fan ownership στο Concerto με κεντρικό auth, custom/dynamic ticket types, subscription-based tickets-per-event όριο, δομή Radix/shadcn στα UI components) χωρίς να αιτιολογήσεις ρητά γιατί. Όταν δίνεται reference component, ακολούθησε αυστηρά τη δομή του. Συνέχισε από τα "Επόμενα βήματα" παραπάνω.
 >
 > **Κανόνας του χρήστη (14/9):** Ποτέ μην κάνεις πρωτοβουλία σε κάτι "από την αρχή" — και ειδικά καμία διαγραφή (δεδομένων, jobs, αρχείων, migrations, ό,τι) — χωρίς να ρωτήσεις πρώτα τον χρήστη και να πάρεις ρητή απάντηση. Αυτό ισχύει ακόμα κι αν κάτι φαίνεται προφανές, ασφαλές, ή προϋπάρχον/undocumented. Ό,τι κάνεις, ενημέρωσε τον χρήστη μετά.
+
+---
+
+## 22/9 — Stripe Connect Integration & Netlify Functions (Ενσωμάτωση & Production)
+
+### Τι χτίστηκε
+
+**Phase 1 (Stripe Connect Setup):**
+
+Κάθε tenant (artist/band) τώρα μπορεί να συνδέσει το δικό του Stripe account μέσω OAuth flow (Stripe Connect).
+
+- **`FanStripeAccountRoute.jsx`** — Νέα σελίδα στη tenant dashboard όπου ο artist:
+  - Κάνει connect το Stripe account του μέσω λίγα κλικ (OAuth redirect σε Stripe)
+  - Βλέπει το status (connected/pending/error) του account του
+  - Μπορεί να αποσυνδεθεί (disconnect)
+  - Σίγουρα δεν έχουμε κλειδιά/credentials του artist αποθηκευμένα — μόνο το Stripe account ID και κάποια metadata για status
+
+- **`useConnectStripeAccount.js`** — React query hook που διαχειρίζεται το OAuth callback + account status
+- **`useTenantStripeStatus.js`** — Hook για να σηκώσεις το τρέχον status ενός tenant's Stripe account
+- **Database migration `20260922160000_add_tenant_stripe_account.sql`:**
+  - Νέα στήλη `stripe_account_id` στο `tenants` table (nullable, unique, indexed)
+  - Νέα στήλη `stripe_account_status` (enum: `'pending'`, `'active'`, `'restricted'`, `'disconnected'`)
+  - Audit columns: `stripe_connect_at`, `stripe_last_sync_at`
+
+**Phase 1b (Netlify Functions - Serverless Backend):**
+
+Δεν μπορούμε να χειριστούμε Stripe OAuth ή payments σε stateless frontend. Χτίσαμε Netlify Functions (serverless) ως backend:
+
+- **`apps/tenant-site/netlify.toml`** — Configuration για Netlify builds + function deployment
+- **`apps/tenant-site/netlify/functions/stripe-connect-onboarding.mjs`** — Κύριο function:
+  - Λαμβάνει POST request από frontend (`{ tenantId, returnUrl }`)
+  - Δημιουργεί Stripe Connect OAuth link για αυτόν τον tenant
+  - Επιστρέφει redirect URL
+  - **Σημαντικό:** Κλειδί Stripe API σε `.env` (Netlify env vars), ΔΕΝ hardcoded
+  - Return URL pointing back σε `/tenant/stripe/callback` (handled από React component)
+
+- **Deployment:** Όταν pushάρεις στον main branch, Netlify αυτόματα:
+  - Builds `apps/tenant-site/` (Vite)
+  - Deploys functions από `netlify/functions/` ως `/.netlify/functions/<filename>`
+  - Publishes το site
+
+### News/Posts Feature (Sidebar addition)
+
+Παράλληλα χτίστηκε ένα απλό social features:
+
+- **`NewsRoute.jsx`** — Νέα σελίδα όπου ο artist δημοσιεύει updates (photos, small videos, text)
+- **`NewPostDialog.jsx`** — Modal για δημοσίευση
+- **`PostCard.jsx`** — Κάρτα για εμφάνιση κάθε post (π.χ. στο News tab)
+- **Database migration `20260920100000_add_tenant_posts.sql`:**
+  - Νέα table `tenant_posts` (id, tenant_id, content, media_urls, created_by, created_at)
+  - Νέα table `tenant_post_likes` (id, post_id, fan_id, created_at) — fans μπορούν να κάνουν like
+- **Queries:**
+  - `useCreateTenantPost.js` — POST request για δημοσίευση
+  - `useTenantPosts.js` — Fetch posts με pagination (refetch κάθε 15 sec)
+  - `useToggleTenantPostLike.js` — Like/unlike logic
+- **Utilities:**
+  - `checkVideoDuration.js` — Ελέγχει αν το video είναι πάνω από το όριο (π.χ. 5 λεπτά) πριν upload
+  - `compressImage.js` — Συμπιέζει εικόνες πριν upload (quality optimization)
+
+### Architectural Decisions & Next Steps
+
+**Τι μένει να γίνει:**
+
+1. **Environment variables in production:**
+   - Stripe secret key + publishable key στο Netlify env
+   - Database URL + auth credentials στο Netlify (για τα functions να χτυπήσουν τη Supabase)
+   - Βλ. Netlify docs για secrets management
+
+2. **Live Stripe testing:**
+   - Δημιουργία test Stripe account (δωρεάν, sandbox mode)
+   - Configuration του OAuth application στο Stripe dashboard
+   - Test του full flow (connect → onboarding → callback)
+
+3. **Payment checkout (βλ. φλους σχόλιο στο CartDialog — ΔΕΝ χρειάζεται σήμερα):**
+   - Μόλις ο artist έχει connected Stripe account, τα checkout payments (κάρτες fan) θα πάνε στο δικό του Stripe account
+   - Stripe fee (~2.9% + $0.30 ανά transaction) αφαιρείται αυτόματα, ο artist παίρνει το καθάρό
+   - Concerto δεν λαμβάνει άμεση cut από τα payments (ήδη πληρώθηκε από tenant setup fee ή θα γίνει subscription model)
+
+4. **Rate limiting / Security:**
+   - Netlify functions είναι public — χρειάζεται rate limiting στο OAuth endpoint (αποφυγή spam/brute force)
+   - Request signing ή API key validation (TODO, όχι σημερινή ανάγκη, αλλά documentation για μελλοντικό dev)
+
+5. **Email notifications (Resend integration — ΔΕΝ χτίστηκε σήμερα):**
+   - Όταν artist συνδεθεί, λαμβάνει email confirmation
+   - Όταν fan αγοράσει, receives invoice (Stripe → Resend → email)
+   - Χτίζεται ΜΕ checkout function όταν εκείνη γίνει, όχι ξεχωριστά
+
+### Updated Components
+
+- **Header.jsx:** Προστέθηκε link προς νέα "Stripe Settings" σελίδα (conditionally για tenants που έχουν admin perms)
+- **FanDashboardLayout.jsx:** Προστέθηκε νέο sidebar item για "News" route
+- **Main.jsx:** Registered νέες routes για Stripe + News
+
+### Testing Checklist (user's responsibility, όχι χτίστηκε)
+
+- [ ] Δημιουργία test Stripe account
+- [ ] Configuration OAuth app στο Stripe dashboard
+- [ ] Netlify deploy (push main → auto-deploy)
+- [ ] Live test: artist connects Stripe account via UI
+- [ ] Callback redirect works correctly
+- [ ] Database row created με σωστό account ID
+- [ ] News posts can be created + liked by fans
+- [ ] Video duration check blocks > 5 min
+- [ ] Image compression reduces file size
+
+---
+
