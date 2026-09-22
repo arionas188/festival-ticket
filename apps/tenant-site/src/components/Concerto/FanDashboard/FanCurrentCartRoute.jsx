@@ -68,8 +68,8 @@ export default function FanCurrentCartRoute() {
               </div>
 
               <ul role="list" className="mt-3 divide-y divide-gray-100">
-                {group.items.map(({ product, quantity }) => (
-                  <li key={product.id} className="flex items-center gap-3 py-3">
+                {group.items.map(({ id, product, variant, quantity }) => (
+                  <li key={id} className="flex items-center gap-3 py-3">
                     <img
                       src={product.image_urls?.[0]}
                       alt={product.name}
@@ -78,6 +78,11 @@ export default function FanCurrentCartRoute() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-gray-900">
                         {product.name}
+                        {variant && (
+                          <span className="ml-1 font-normal text-gray-500">
+                            ({variant.size})
+                          </span>
+                        )}
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
                         {quantity} × {Number(product.price).toFixed(2)}€

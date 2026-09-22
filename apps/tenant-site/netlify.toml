@@ -1,0 +1,9 @@
+# Δηλώνει ρητά πού ζουν οι Netlify Functions αυτού του site (22/9 --
+# πρώτη φορά που χρειαζόμαστε server-side κώδικα σε αυτό το project, βλ.
+# concerto-brief.md "Πότε θα χρειαστεί πραγματικά backend component").
+# ΕΠΙΤΗΔΕΣ χωρίς [build] section εδώ -- τα ήδη υπάρχοντα build/publish
+# settings του site (base directory = apps/tenant-site, ρυθμισμένα από
+# πριν στο Netlify dashboard) ΔΕΝ αγγίζονται/παρακάμπτονται καθόλου από
+# αυτό το αρχείο.
+[functions]
+  directory = "netlify/functions"

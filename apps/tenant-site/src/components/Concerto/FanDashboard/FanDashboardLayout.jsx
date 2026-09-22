@@ -5,13 +5,16 @@ import {
   HeartIcon,
   ShoppingCartIcon,
   CheckCircleIcon,
+  CreditCardIcon,
 } from "@heroicons/react/24/outline"
 import {
   UserCircleIcon as UserCircleIconSolid,
   HeartIcon as HeartIconSolid,
   ShoppingCartIcon as ShoppingCartIconSolid,
+  CreditCardIcon as CreditCardIconSolid,
 } from "@heroicons/react/24/solid"
 import { useAuth } from "../../../hooks/useAuth"
+import { useIsTenantAdmin } from "../../../hooks/useIsTenantAdmin"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -74,6 +77,19 @@ const NAV_ITEMS = [
   },
 ]
 
+// Ξεχωριστό από το NAV_ITEMS (ΟΧΙ πάντα ορατό) -- εμφανίζεται στο pill
+// ΜΟΝΟ όταν ο συνδεδεμένος fan είναι πραγματικός admin ΑΥΤΟΥ του tenant
+// (22/9, ρητό αίτημα χρήστη -- βλ. useIsTenantAdmin.js, ίδιο hook/pattern
+// με το inline edit μολυβάκι στο Header.jsx). Ίδιο σχήμα leaf item με
+// "Προφίλ" ώστε να περνάει από το ΙΔΙΟ, ήδη υπάρχον render branch
+// παρακάτω, χωρίς ξεχωριστό JSX block.
+const STRIPE_NAV_ITEM = {
+  title: "Πληρωμές",
+  to: "/account/stripe",
+  icon: CreditCardIcon,
+  activeIcon: CreditCardIconSolid,
+}
+
 function isPathActive(pathname, to) {
   return pathname === to || pathname.startsWith(`${to}/`)
 }
@@ -96,6 +112,12 @@ export default function FanDashboardLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const tenantName = settings?.display_name || tenant?.name
+
+  // Ίδιο hook/RLS-protected στοιχείο (tenant_admins) με το inline edit
+  // μολυβάκι στο Header.jsx -- ΜΟΝΟ πραγματικοί admins αυτού του tenant
+  // βλέπουν το εικονίδιο "Πληρωμές" παρακάτω, ποτέ απλοί fans.
+  const { data: isTenantAdmin } = useIsTenantAdmin(tenant?.id, user?.id)
+  const navItems = isTenantAdmin ? [...NAV_ITEMS, STRIPE_NAV_ITEM] : NAV_ITEMS
 
   // Bug (8/9, μετακομισμένο 10/9 από το ConcertoBar.jsx — βλ. brief): μετά
   // από sign out (απλή αποσύνδεση Ή διαγραφή λογαριασμού) ενώ ο fan ήταν
@@ -139,7 +161,7 @@ export default function FanDashboardLayout() {
 
             <AccountAvatarMenu />
 
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               // Leaf item ("Προφίλ") — απλός σύνδεσμος, χωρίς dropdown.
               if (!item.items) {
                 const active = isPathActive(location.pathname, item.to)
@@ -223,7 +245,7 @@ export default function FanDashboardLayout() {
 
       <div className="mx-auto w-full max-w-3xl px-4 pt-20 pb-8 sm:px-6 lg:px-8">
         <p className="mb-6 text-sm font-semibold text-foreground">Ο λογαριασμός μου</p>
-        <Outlet context={{ fanId: user?.id }} />
+        <Outlet context={{ fanId: user?.id, tenantId: tenant?.id }} />
       </div>
     </div>
   )

@@ -18,6 +18,7 @@ import EventFormRoute from './components/Events/EventFormRoute.jsx'
 import EventModalRoute from './components/Events/EventModalRoute.jsx'
 import EventInfoRoute from './components/Events/EventInfoRoute.jsx'
 import InfoRoute from './components/About/InfoRoute.jsx'
+import NewsRoute from './components/News/NewsRoute.jsx'
 import FanDashboardLayout from './components/Concerto/FanDashboard/FanDashboardLayout.jsx'
 import FanProfileRoute from './components/Concerto/FanDashboard/FanProfileRoute.jsx'
 import FanTenantsRoute from './components/Concerto/FanDashboard/FanTenantsRoute.jsx'
@@ -25,6 +26,7 @@ import FanFavoriteMerchRoute from './components/Concerto/FanDashboard/FanFavorit
 import FanFavoriteEventsRoute from './components/Concerto/FanDashboard/FanFavoriteEventsRoute.jsx'
 import FanOrdersRoute from './components/Concerto/FanDashboard/FanOrdersRoute.jsx'
 import FanCurrentCartRoute from './components/Concerto/FanDashboard/FanCurrentCartRoute.jsx'
+import FanStripeAccountRoute from './components/Concerto/FanDashboard/FanStripeAccountRoute.jsx'
 import ErrorPage from './components/ErrorPage/ErrorPage.jsx'
 
 // 19/9, ρητή αναφορά χρήστη (401 στο console σε cart_items) — το "σπασμένο
@@ -64,6 +66,11 @@ const router = createBrowserRouter([
         element: <TenantLayout />,
         children: [
           { path: 'about', element: <InfoRoute /> },
+          // /news -- "New" tab (20/9, ρητό αίτημα χρήστη): instagram-
+          // stories στυλ αναρτήσεις (φωτογραφία Ή video, βλ.
+          // concerto-brief.md). ΕΠΙΠΕΔΟ (flat) sibling, ίδιο μοτίβο με τα
+          // άλλα τρία tabs.
+          { path: 'news', element: <NewsRoute /> },
           // /merch → πλέγμα κατηγοριών. Το προϊόν είναι child route, οπότε το modal
           // κάθεται πάνω στο πλέγμα χωρίς κόλπα με location state.
           {
@@ -144,6 +151,7 @@ const router = createBrowserRouter([
           { path: 'events', element: <FanFavoriteEventsRoute /> },
           { path: 'orders', element: <FanOrdersRoute /> },
           { path: 'cart', element: <FanCurrentCartRoute /> },
+          { path: 'stripe', element: <FanStripeAccountRoute /> },
         ],
       },
     ],

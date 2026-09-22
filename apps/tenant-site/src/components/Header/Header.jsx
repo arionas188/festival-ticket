@@ -13,20 +13,23 @@ import { useUnfollowTenant } from "../../queries/useFanTenants"
 import { useCart } from "../../queries/useCart"
 import { useFavorites, useToggleFavorite } from "../../queries/useFavorites"
 
-const TABS = ['Πληροφορίες', 'Εκδηλώσεις', 'Merch Store']
+const TABS = ['Πληροφορίες', 'Εκδηλώσεις', 'Merch Store', 'New']
 
 export default function Header({ tenant, settings, onRequireAuth }) {
   const location = useLocation()
   const navigate = useNavigate()
 
-  // Και τα τρία tabs είναι πλέον routes (Merch, Events, και το index '/' για
-  // Πληροφορίες) — το activeTab προκύπτει αποκλειστικά από το pathname, χωρίς
-  // ξεχωριστό React state.
+  // Και τα τέσσερα tabs είναι πλέον routes (Merch, Events, News, και το
+  // index '/' για Πληροφορίες) — το activeTab προκύπτει αποκλειστικά από το
+  // pathname, χωρίς ξεχωριστό React state. "New" (20/9, ρητό αίτημα χρήστη)
+  // προστέθηκε τελευταίο -- βλ. components/News/NewsRoute.jsx.
   const activeTab = location.pathname.startsWith('/merch')
     ? 'Merch Store'
     : location.pathname.startsWith('/events')
       ? 'Εκδηλώσεις'
-      : 'Πληροφορίες'
+      : location.pathname.startsWith('/news')
+        ? 'New'
+        : 'Πληροφορίες'
 
   const { user, isLoggedIn } = useAuth()
   // Inline admin-editing (12/9, βλ. concerto-brief.md) — true ΜΟΝΟ αν ο
@@ -86,6 +89,10 @@ export default function Header({ tenant, settings, onRequireAuth }) {
     }
     if (tab === 'Εκδηλώσεις') {
       navigate('/events')
+      return
+    }
+    if (tab === 'New') {
+      navigate('/news')
       return
     }
     navigate('/about')
@@ -215,9 +222,12 @@ export default function Header({ tenant, settings, onRequireAuth }) {
             σελίδα πλατύτερη από το viewport, οπότε το κινητό zoom-out-άρει
             αυτόματα ΟΛΟΚΛΗΡΗ τη σελίδα για να χωρέσει — απ' αυτό η
             εντύπωση "όλο το site φαίνεται μικρότερο + κενό στο πλάι".
-            Grid 3 ίσων στηλών εγγυάται ότι ΠΟΤΕ δεν ξεπερνάνε το πλάτος
-            του container, ό,τι μήκος κειμένου κι αν έχουν. */}
-        <div className="mt-6 grid grid-cols-3 items-center gap-1.5 border-b border-gray-200 pb-4 sm:gap-2">
+            Grid ίσων στηλών εγγυάται ότι ΠΟΤΕ δεν ξεπερνάνε το πλάτος
+            του container, ό,τι μήκος κειμένου κι αν έχουν.
+            grid-cols-4 (20/9, με την προσθήκη του "New" tab) -- ίδιο
+            σκεπτικό, "New" είναι μικρή λέξη οπότε δεν επανέρχεται το ίδιο
+            πρόβλημα υπερχείλισης σε στενά κινητά. */}
+        <div className="mt-6 grid grid-cols-4 items-center gap-1.5 border-b border-gray-200 pb-4 sm:gap-2">
           {TABS.map((tab) => (
             <Button
               key={tab}

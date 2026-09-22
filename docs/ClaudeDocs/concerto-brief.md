@@ -2728,10 +2728,11 @@ DB trigger (`set_product_slug`, migration `20260906075738`) που το
 error. `product_variants` φεύγουν αυτόματα (`on delete cascade`, ήδη
 υπήρχε).
 
-⚠️ **Να τρέξει το migration `20260920080000_add_products_admin_write.sql`
-στο Supabase SQL editor** πριν δοκιμαστεί το νέο "Πρόσθεσε προϊόν" -- χωρίς
-αυτό, κάθε insert/update/delete θα αποτυγχάνει σιωπηλά λόγω RLS (καμία
-write policy δεν υπήρχε πριν σε products/product_variants).
+✅ **Migration `20260920080000_add_products_admin_write.sql` επιβεβαιωμένο
+ΤΡΕΞΕ στη ζωντανή βάση** (20/9, επιβεβαιώθηκε με `select policyname, cmd
+from pg_policies where tablename in ('products','product_variants')` --
+8 policies συνολικά, INSERT/UPDATE/DELETE για tenant admins + SELECT
+δημόσιο σε ΚΑΘΕ table, ακριβώς όπως αναμενόταν).
 
 `npx eslint .` επιβεβαιώθηκε αμετάβλητο (19 errors/1 warning βάση +
 1 ακόμα warning, ίδιας ακριβώς φύσης με το ήδη υπάρχον στο
@@ -2839,6 +2840,194 @@ re-renders — άρα τα components που υπολογίζουν
 
 Καμία νέα migration αυτόν τον γύρο — και οι δύο διορθώσεις είναι
 αμιγώς frontend, καμία αλλαγή σχήματος βάσης.
+
+## 20/9 — "New" tab: instagram-stories στυλ αναρτήσεις (φωτογραφία/video)
+
+Ρητό αίτημα χρήστη, νέα ενότητα: κάθε tenant παίρνει τέταρτο tab ("New",
+δίπλα σε Πληροφορίες/Εκδηλώσεις/Merch Store) όπου ο tenant admin ανεβάζει
+ΕΙΤΕ φωτογραφία ΕΙΤΕ video (ρητή απόφαση χρήστη — ΠΟΤΕ και τα δύο μαζί
+στην ίδια ανάρτηση), π.χ. "πάμε live σε 1 ώρα" πριν ανέβει η μπάντα στη
+σκηνή. Οι fans βλέπουν feed και μπορούν ΜΟΝΟ να κάνουν like — καμία
+δυνατότητα σχολίου/απάντησης.
+
+**Λήξη — ΜΟΝΙΜΗ διαγραφή, ρητή απόφαση χρήστη.** Ο admin διαλέγει
+διάρκεια κατά την ανάρτηση (3/6/12/24/48 ώρες, dropdown στο
+`NewPostDialog.jsx`) και η ανάρτηση διαγράφεται ΠΛΗΡΩΣ (όχι απλή
+απόκρυψη/φιλτράρισμα) μόλις περάσει — ίδια φιλοσοφία με το ήδη υπάρχον
+`expire_stale_orders`, αλλά με ένα επιπλέον, σημαντικό τεχνικό βήμα: το
+`expire_tenant_posts()` (migration `20260920100000_add_tenant_posts.sql`)
+χρησιμοποιεί το `pg_net` extension για να καλέσει το ΠΡΑΓΜΑΤΙΚΟ Supabase
+Storage HTTP API (`DELETE /storage/v1/object/tenant-posts/<path>`) ΠΡΙΝ
+σβήσει τη γραμμή — μια απλή SQL διαγραφή πάνω στο `storage.objects` θα
+άφηνε το πραγματικό αρχείο "ορφανό" στο backend για πάντα (συνεχίζει να
+μετράει storage/κόστος, ειδικά κρίσιμο για video). Αυτό συζητήθηκε ρητά
+με τον χρήστη ως τεχνικό trade-off πριν χτιστεί — επέλεξε το πλήρως
+αυτόματο pg_net + Vault, όχι το χειροκίνητο καθάρισμα.
+
+⚠️ **Vault secrets, ΧΕΙΡΟΚΙΝΗΤΟ ΒΗΜΑ ΤΟΥ ΧΡΗΣΤΗ, ΠΟΤΕ μέσω chat/AI**
+(το service_role key παρακάμπτει ΚΑΘΕ RLS — το πιο ευαίσθητο credential
+του project, γι' αυτό ΔΕΝ το ζήτησα/το είδα ποτέ):
+
+1. Database → Extensions → ενεργοποίησε `pg_net` (αν δεν ενεργοποιήθηκε
+   ήδη από το `create extension if not exists pg_net;` μέσα στο migration).
+2. Στο SQL editor, ξεχωριστά:
+   `select vault.create_secret('https://<project-ref>.supabase.co', 'concerto_project_url', '...')`
+3. Στο SQL editor, ξεχωριστά:
+   `select vault.create_secret('<το service_role key σου>', 'concerto_service_role_key', '...')`
+
+Μέχρι να τρέξουν τα 2)/3), οι αναρτήσεις ΔΕΝ διαγράφονται καθόλου (ασφαλές
+σχεδιασμένο fallback — η function επιστρέφει αθόρυβα χωρίς να σβήσει
+τίποτα αν λείπουν τα secrets, βλ. σχόλια στο migration) — απλά
+συσσωρεύονται. Θα φανεί γρήγορα σε δοκιμαστική ανάρτηση 3 ωρών που δεν
+εξαφανίζεται.
+
+**Νέο, ξεχωριστό storage bucket `tenant-posts`** (ΟΧΙ το ήδη υπάρχον
+`tenant-images`) — 25MB όριο, δέχεται εικόνα ΚΑΙ video mime types,
+εντελώς διαφορετικός κύκλος ζωής (αυτόματη μόνιμη διαγραφή, το
+tenant-images ΠΟΤΕ). Ίδιο RLS μηχανισμό με tenant-images (`tenant_admins`,
+πρώτο folder = tenant_id).
+
+**Φωτογραφία:** συμπιέζεται ΣΤΟΝ BROWSER πριν το upload (νέο
+`lib/compressImage.js`, canvas resize σε max 1920px στη μεγάλη πλευρά +
+JPEG quality 0.82, καμία νέα βιβλιοθήκη) — μια σύγχρονη φωτογραφία
+κινητού είναι συχνά 4000×3000px/αρκετά MB, απαράδεκτο να ανέβει ωμή.
+
+**Video:** ΔΕΝ συμπιέζεται (ρητά αναγνωρισμένο στη συζήτηση με τον
+χρήστη — δεν υπάρχει απλός, ελαφρύς client-side τρόπος σαν το canvas
+resize της φωτογραφίας). Αντ' αυτού, νέο `lib/checkVideoDuration.js`
+διαβάζει τη διάρκεια (hidden `<video>` element, `loadedmetadata`) ΠΡΙΝ
+καν ξεκινήσει το upload — απορρίπτεται με μήνυμα αν ξεπερνάει τα 20"
+(ρητό όριο χρήστη), ΔΕΝ ανεβαίνει καθόλου. 25MB file size cap ελέγχεται
+ΚΑΙ client-side (γρήγορο feedback) ΚΑΙ server-side (bucket
+`file_size_limit`, defense in depth ίδιο μοτίβο με tenant-images).
+
+**Νέος φάκελος** `components/News/` (ίδιο επίπεδο με About/Merch/Events):
+`NewsRoute.jsx` (feed + admin "Νέα ανάρτηση" button, ίδιο layout μοτίβο
+με `EventsRoute.jsx`), `PostCard.jsx` (media + like button/count + σχετική
+ώρα ανάρτησης), `NewPostDialog.jsx` (admin-only φόρμα: ToggleGroup
+Φωτογραφία/Video, file input με dynamic `accept`, Select διάρκειας,
+προαιρετική λεζάντα — ίδιο επίπεδο πολυπλοκότητας/useState μοτίβο με
+`EditCoverImageDialog.jsx`, όχι react-hook-form/zod, δεν χρειαζόταν εδώ).
+
+**Route:** `/news`, flat sibling μέσα στο `TenantLayout`, ίδιο μοτίβο με
+τα άλλα τρία tabs (βλ. `main.jsx`). **Header.jsx:** `TABS` array πήρε
+τέταρτο στοιχείο ("New"), `activeTab`/`handleTabClick` πήραν νέο branch,
+`grid-cols-3` → `grid-cols-4` κάτω από τα tab buttons.
+
+**Νέα query hooks** (`queries/`): `useTenantPosts.js` (feed, embed
+`tenant_post_likes(fan_id)` για like_count/isLiked χωρίς ξεχωριστή
+κλήση, `refetchInterval: 15000` ίδιο με `useProducts.js`, ΚΑΙ
+client-side φιλτράρισμα `expires_at > now()` ως δεύτερη γραμμή άμυνας
+για το <60" παράθυρο ανάμεσα σε λήξη και το επόμενο cron tick — ίδιο
+μάθημα με το bug `20260919091000` στα stock holds), `useCreateTenantPost.js`
+(upload + insert, compress/duration-check πριν το upload), 
+`useToggleTenantPostLike.js` (ίδιο toggle μοτίβο insert/delete με
+`useFavorites.js`).
+
+`npx eslint .` επιβεβαιώθηκε αμετάβλητο (19 errors/2 warnings βάση,
+καμία παλινδρόμηση — κανένα από τα νέα αρχεία δεν εμφανίζεται στη λίστα
+σφαλμάτων).
+
+⚠️ **Migration `20260920100000_add_tenant_posts.sql` να τρέξει στο
+Supabase SQL editor**, ΚΑΙ τα δύο `vault.create_secret` βήματα παραπάνω
+(#2/#3) — χωρίς αυτά, το "New" tab δουλεύει κανονικά (upload/feed/like)
+αλλά ΔΕΝ διαγράφει ποτέ τίποτα.
+
+## 20/9, βραδινό — Backlog / ανοιχτά νήματα (ΔΕΝ έχουν χτιστεί ακόμα)
+
+Ρητό αίτημα χρήστη: σημείωση ανοιχτών θεμάτων που συζητήθηκαν αλλά δεν
+προχωρήσαμε σήμερα (χρήστης κουρασμένος, θα συνεχίσουμε άλλη φορά) —
+ΚΑΝΕΝΑ από τα παρακάτω δεν είναι χτισμένο, μόνο σημειωμένο ώστε να μην
+χαθεί.
+
+1. **Netlify — πραγματικό wildcard subdomain σε production** (π.χ.
+   `<tenant>.concerto.gr` ζωντανά, όχι μόνο τοπικά μέσω `/etc/hosts` —
+   βλ. ήδη υπάρχουσα σημείωση γραμμή ~1133 για το τοπικό setup). Λόγος
+   που το θέλει ο χρήστης ΤΩΡΑ: να μπορεί να δοκιμάσει/δει ζωντανά
+   πράγματα που θα μπορούν να κάνουν οι fans μεταξύ τους ΚΑΙ με τις
+   μπάντες (βλ. σημείο 2 παρακάτω) — χρειάζεται πραγματικό, προσβάσιμο
+   URL ανά tenant για ρεαλιστικό testing, όχι μόνο ένα deployed URL.
+   Ήδη υπάρχει έρευνα Netlify vs Cloudflare Pages vs Vercel από
+   νωρίτερα στη συνεδρία (σύσταση: μείνε Netlify προς το παρόν).
+
+2. **Λίστα νέων "social" features μεταξύ fans, και μεταξύ fans/μπάντων**
+   — ιδέα ρίχτηκε, ΔΕΝ έχει καταγραφεί ακόμα συγκεκριμένη λίστα. Να
+   συζητηθεί/καταγραφεί σε επόμενη συνεδρία, πέρα από το ήδη υπάρχον
+   like-only στο "New" tab.
+
+3. **Βελτιώσεις στο ήδη υπάρχον "New" tab**, με βάση ό,τι θα προκύψει
+   από το ζωντανό test του χρήστη (φωτογραφία/video, 3ωρη δοκιμαστική
+   ανάρτηση σε εξέλιξη — βλ. ενότητα ακριβώς πάνω). Καμία συγκεκριμένη
+   λεπτομέρεια ακόμα, θα προστεθεί μόλις ο χρήστης πει τι τον
+   προβλημάτισε.
+
+4. **Μελλοντικό ξαναχτίσιμο του Concerto σε Next.js** — ρητή πρόθεση
+   χρήστη ("μετά να ξεκινήσουμε να κάνουμε το Concerto με Next"), ΑΦΟΥ
+   ολοκληρωθούν τα παραπάνω. Καμία υλοποίηση ακόμα, ΑΛΛΑ μία αρχιτεκτονική
+   απόφαση ήδη συζητήθηκε και συμφωνήθηκε με τον χρήστη, ΝΑ ΘΥΜΗΘΕΙ το
+   AI assistant όταν ξεκινήσει πραγματικά αυτό το κομμάτι:
+   - **ΜΕΣΑ στο ίδιο repo/φάκελο** (`Concerto/`), ΟΧΙ νέο ξεχωριστό project
+     από την αρχή.
+   - Νέο app μέσα στο ήδη υπάρχον npm workspaces monorepo, π.χ.
+     `apps/tenant-site-next/`, ΔΙΠΛΑ στο ήδη υπάρχον `apps/tenant-site`
+     (ΟΧΙ αντικατάσταση αμέσως) — ώστε να χτίζεται/δοκιμάζεται σταδιακά
+     χωρίς διακοπή στο ήδη live site.
+   - Ξαναχρησιμοποιεί `packages/shared` (π.χ. το κοινό Supabase client
+     wrapper) ΚΑΙ ολόκληρο το `supabase/migrations` ως ενιαίο σημείο
+     αλήθειας για το schema — το Next.js είναι ΜΟΝΟ νέο frontend πάνω
+     στο ίδιο backend, καμία αλλαγή στη βάση χρειάζεται γι' αυτό καθαυτό
+     το migration στοίβας.
+   - Netlify build/publish config θα χρειαστεί ενημέρωση όταν
+     αποφασιστεί το cutover — λεπτομέρεια για τότε, όχι τώρα.
+
+## 20/9, βραδινό #2 — Σημείωση: αρχιτεκτονική/κόστος για scale (ΔΕΝ χρειάζεται τώρα)
+
+Ρητή συζήτηση χρήστη για το αν το Netlify+Supabase setup αντέχει σε πολύ
+μεγάλη κλίμακα (ρητό παράδειγμα: 120.000 **ταυτόχρονους** χρήστες) — ΔΕΝ
+είναι σημερινή ανάγκη, μόνο προβληματισμός/σχεδιασμός για το μέλλον.
+Καταγράφεται εδώ ώστε να μην χρειαστεί να ξαναγίνει η ίδια συζήτηση από
+την αρχή.
+
+**Συμπέρασμα:** εφικτό, ΔΕΝ χρειάζεται server με PHP/δικό του
+disk-RAM-CPU (Netlify = στατικό hosting μέσω CDN, Supabase = ήδη
+διαχειριζόμενος Postgres — αυτό αντικαθιστά πλήρως ένα παραδοσιακό
+VPS/shared hosting). Για emails σε fans (παραγγελίες κ.λπ.): ΟΧΙ PHP,
+μία μικρή serverless function (Supabase Edge Function ή Netlify
+Function) + email API (π.χ. Resend) — ήδη προγραμματισμένο να χτιστεί
+ΜΑΖΙ με το Stripe checkout (βλ. ήδη υπάρχουσα σημείωση, "Ρητά εκτός
+scope σήμερα" στην ενότητα ~14/9).
+
+**Backups:** Free plan Supabase = ΚΑΝΕΝΑ αυτόματο backup (χρειάζεται
+χειροκίνητο `supabase db dump` περιοδικά). Pro/Team/Enterprise = αυτόματα
+καθημερινά backups (7/14/30 μέρες retention αντίστοιχα). Ο χρήστης δεν
+έχει ακόμα επιβεβαιώσει σε ποιο πλάνο είναι.
+
+**Τεχνικά σημεία που ΘΑ χρειαστούν σε πολύ μεγάλη ταυτόχρονη κίνηση**
+(όχι τώρα, μόνο όταν πλησιάσει πραγματικά):
+- Μεγαλύτερο Supabase compute tier (Large/XL/2XL) — connection pooling
+  (Supavisor) ήδη υπάρχει, δεν χρειάζεται 1:1 σύνδεση ανά χρήστη.
+- Αλλαγή από interval polling (`refetchInterval: 15000`, ήδη σε
+  `useProducts.js`, `useTenantPosts.js`, κ.ά.) σε Supabase Realtime
+  (websocket push) — σε πολύ μεγάλη κλίμακα το polling παράγει περιττό
+  φόρτο.
+- CDN/edge caching για δημόσιες σελίδες με πολλή ανάγνωση.
+- Load testing ΠΡΙΝ φτάσει πραγματικά εκεί, όχι ζωντανή ανακάλυψη.
+
+**Ενδεικτικό, σταδιακό μηνιαίο κόστος** (Supabase+Netlify+email, USD,
+βάσει επίσημων τιμολογίων 20/9, ΘΑ αλλάξουν με τον καιρό — να
+ξαναελεγχθούν πριν ληφθεί απόφαση):
+
+| Στάδιο | Ταυτόχρονοι | Μηνιαίο σύνολο (εκτίμηση) |
+|---|---|---|
+| Ξεκίνημα | 0–300 | ~$0 (Free tiers, χωρίς backups) |
+| Πρώτη κίνηση | 300–2.000 | ~$45–65 |
+| Μεσαία κίνηση | 2.000–10.000 | ~$120–250 |
+| Μεγάλη κίνηση | 10.000–50.000 | ~$300–500 |
+| Στόχος 120.000 | 120.000 | ~$400–650+ |
+
+Ανεβαίνει σταδιακά, ΟΧΙ όλο μαζί από την αρχή — ο χρήστης ανεβάζει tier
+όποτε το δείχνουν πραγματικά τα dashboards (Supabase connections/CPU,
+Netlify bandwidth), όχι προληπτικά.
 
 ## Οδηγία προς AI assistant (Claude ή άλλο)
 

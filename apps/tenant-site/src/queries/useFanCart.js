@@ -16,19 +16,36 @@ export function useFanCart(fanId) {
     queryFn: async () => {
       const { data: cartRows, error: cartError } = await supabase
         .from("cart_items")
-        .select("id, quantity, product_id, tenant_id")
+        .select("id, quantity, product_id, variant_id, tenant_id")
         .eq("fan_id", fanId)
       if (cartError) throw cartError
       if (cartRows.length === 0) return []
 
       const productIds = [...new Set(cartRows.map((r) => r.product_id))]
       const tenantIds = [...new Set(cartRows.map((r) => r.tenant_id))]
+      // 22/9, bug fix (React "duplicate key" warning, ρητή αναφορά χρήστη):
+      // χρειάζεται και το μέγεθος εδώ, ίδιο μοτίβο με useCart.js -- βλ.
+      // παρακάτω γιατί.
+      const variantIds = [...new Set(cartRows.map((r) => r.variant_id).filter(Boolean))]
 
       const { data: products, error: productsError } = await supabase
         .from("products")
         .select("id, name, price, image_urls")
         .in("id", productIds)
       if (productsError) throw productsError
+
+      // Άδειο array όταν δεν υπάρχει κανένα variant_id -- το .in() με άδειο
+      // array θα επέστρεφε 0 γραμμές ούτως ή άλλως, αλλά το προσπερνάμε
+      // ρητά για να μην κάνουμε περιττό query.
+      let variants = []
+      if (variantIds.length > 0) {
+        const { data: variantRows, error: variantsError } = await supabase
+          .from("product_variants")
+          .select("id, size")
+          .in("id", variantIds)
+        if (variantsError) throw variantsError
+        variants = variantRows
+      }
 
       const { data: settingsRows, error: settingsError } = await supabase
         .from("tenant_settings")
@@ -46,10 +63,19 @@ export function useFanCart(fanId) {
         const settings = settingsRows.find((s) => s.tenant_id === tenantId)
         const domainRow = domainRows.find((d) => d.tenant_id === tenantId)
 
+        // BUG FIX (22/9, ρητή αναφορά χρήστη -- React error "two children
+        // with the same key"): πριν δεν περνούσε ΚΑΘΟΛΟΥ το row.id εδώ, οπότε
+        // το FanCurrentCartRoute.jsx αναγκαστικά έκανε key={product.id} --
+        // αν ο fan έχει προσθέσει το ΙΔΙΟ προϊόν σε 2 διαφορετικά μεγέθη
+        // (2 ξεχωριστές γραμμές cart_items, ίδιο product_id), προέκυπταν
+        // δύο <li> με το ΙΔΙΟ key. Τώρα κάθε item κουβαλάει το δικό του
+        // cart_items id (μοναδικό ΠΑΝΤΑ) -- βλ. FanCurrentCartRoute.jsx.
         const items = cartRows
           .filter((row) => row.tenant_id === tenantId)
           .map((row) => ({
+            id: row.id,
             product: products.find((p) => p.id === row.product_id),
+            variant: row.variant_id ? variants.find((v) => v.id === row.variant_id) : null,
             quantity: row.quantity,
           }))
           .filter((item) => item.product)

@@ -29,3 +29,5 @@ dist-ssr/
 *.njsproj
 *.sln
 *.sw?
+# Backup zip (21/9) - ρητό αίτημα χρήστη, ΠΟΤΕ σε commit
+concerto-backup-*.zip
