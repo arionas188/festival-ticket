@@ -1,9 +1,15 @@
-# Δηλώνει ρητά πού ζουν οι Netlify Functions αυτού του site (22/9 --
-# πρώτη φορά που χρειαζόμαστε server-side κώδικα σε αυτό το project, βλ.
-# concerto-brief.md "Πότε θα χρειαστεί πραγματικά backend component").
-# ΕΠΙΤΗΔΕΣ χωρίς [build] section εδώ -- τα ήδη υπάρχοντα build/publish
-# settings του site (base directory = apps/tenant-site, ρυθμισμένα από
-# πριν στο Netlify dashboard) ΔΕΝ αγγίζονται/παρακάμπτονται καθόλου από
-# αυτό το αρχείο.
-[functions]
-  directory = "netlify/functions"
+# ⚠️ 23/9 -- ΔΙΟΡΘΩΘΗΚΕ BUG: αυτό το αρχείο ΠΟΤΕ δεν είχε πραγματικά
+# διαβαστεί από το Netlify. Το Netlify ψάχνει netlify.toml ΜΟΝΟ μέσα
+# στο "base directory" του site, και αυτό είναι ρυθμισμένο στο Netlify
+# dashboard ως "/" (root του repo), ΟΧΙ "apps/tenant-site" όπως
+# υποθέταμε λανθασμένα όταν γράφτηκε αρχικά αυτό το αρχείο (22/9).
+# Αποτέλεσμα: το [functions] section που υπήρχε εδώ αγνοούνταν πλήρως
+# -- το stripe-connect-onboarding function ποτέ δεν έγινε deploy, 404
+# σε κάθε κλήση.
+#
+# Η πραγματική ρύθμιση των Netlify Functions είναι πλέον στο
+# netlify.toml ΣΤΗ ΡΙΖΑ του repo (/netlify.toml) -- εκείνο είναι το
+# ένα σημείο αλήθειας τώρα. Αυτό το αρχείο κρατιέται εδώ, άδειο/χωρίς
+# directives, ΣΚΟΠΙΜΑ (όχι διαγραφή) ώστε να εξηγεί σε κάθε μελλοντικό
+# dev/AI γιατί δεν χρησιμοποιείται -- βλ. concerto-brief.md, ενότητα
+# 23/9 debugging.

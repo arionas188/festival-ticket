@@ -1,0 +1,17 @@
+# Netlify build & deploy configuration για το site (root, base
+# directory = "/" -- βλ. Netlify dashboard -> Project configuration ->
+# General -> Build settings). Base directory / Build command
+# (npm run build) / Publish directory (apps/tenant-site/dist) είναι ΗΔΗ
+# σωστά ρυθμισμένα ΑΠΟ ΤΟ DASHBOARD -- ΔΕΝ επαναλαμβάνονται εδώ σκόπιμα,
+# ώστε να μην υπάρχουν δύο σημεία αλήθειας που μπορεί να έρθουν σε
+# σύγκρουση.
+#
+# [functions] ΠΡΕΠΕΙ να οριστεί εδώ, στη ΡΙΖΑ (23/9 -- διόρθωση bug: το
+# apps/tenant-site/netlify.toml ΠΟΤΕ δεν διαβαζόταν, γιατί το Netlify
+# ψάχνει netlify.toml ΜΟΝΟ μέσα στο base directory, που είναι "/", ΟΧΙ
+# apps/tenant-site -- βλ. concerto-brief.md, ενότητα 23/9 debugging).
+# Αποτέλεσμα του bug: το stripe-connect-onboarding function ποτέ δεν
+# έγινε deploy, 404 σε κάθε κλήση. Path εδώ σχετικό με τη ΡΙΖΑ, αφού
+# base directory = "/".
+[functions]
+  directory = "apps/tenant-site/netlify/functions"

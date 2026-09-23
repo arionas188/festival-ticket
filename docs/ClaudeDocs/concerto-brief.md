@@ -3141,3 +3141,15 @@ Netlify bandwidth), όχι προληπτικά.
 
 ---
 
+
+---
+
+## 23/9 — Bug fix: Netlify Functions επέστρεφαν 404 (base directory mismatch)
+
+**Σύμπτωμα:** `POST /.netlify/functions/stripe-connect-onboarding` → 404, γύριζε στο React app's δικό του client-side "not found" page αντί για πραγματικό Netlify response.
+
+**Αιτία (επιβεβαιώθηκε από Netlify dashboard → Project configuration → General → Build settings):** Το πραγματικό **Base directory** του site είναι `/` (root του repo) — ΟΧΙ `apps/tenant-site` όπως υπέθετε λανθασμένα το αρχικό `apps/tenant-site/netlify.toml` (γραμμένο 22/9). Το Netlify διαβάζει `netlify.toml` ΜΟΝΟ μέσα στο base directory, άρα αυτό το αρχείο ποτέ δεν διαβαζόταν — το `[functions] directory` μέσα του αγνοούνταν πλήρως, το function ποτέ δεν έγινε bundle/deploy.
+
+**Fix:** Νέο `netlify.toml` στη **ΡΙΖΑ** του repo με `[functions] directory = "apps/tenant-site/netlify/functions"` (path σχετικό με root). Το παλιό `apps/tenant-site/netlify.toml` κρατήθηκε (όχι διαγραφή) αλλά άδειασε από directives — έχει μόνο επεξηγηματικό σχόλιο για μελλοντική αναφορά. Base directory / Build command / Publish directory ΔΕΝ πειράχτηκαν — ήδη δούλευαν σωστά από το dashboard.
+
+**Εκκρεμεί:** Push + νέο production deploy για να επιβεβαιωθεί ζωντανά (πρόσεξε το banner "operational credits" από 22/9 — μπορεί να χρειάζεται upgrade πριν επιτραπεί νέο production deploy).
