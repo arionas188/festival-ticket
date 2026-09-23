@@ -145,16 +145,21 @@ export default function FanDashboardLayout() {
           animation, ένα σημείο αλήθειας για την κίνηση αντί για δύο
           ξεχωριστά implementations.
           23/9, ΔΕΥΤΕΡΟ ρητό αίτημα χρήστη (μετά το πρώτο demo
-          screenshot): ΑΝΤΙΣΤΡΟΦΗ ύψους — αυτά τα δύο (λογότυπο/avatar)
-          πάνε ΤΩΡΑ στο top-4 (εκεί που ήταν το pill πριν), και το pill
-          πάει top-20 (εκεί που ήταν αυτά τα δύο πριν) — βλ. παρακάτω.
-          Το λογότυπο (`ConcertoLogo` αριστερά) έγινε επίσης λίγο
-          μεγαλύτερο (size 44 → 56, ρητό αίτημα) — ΜΟΝΟ αυτό, το tenant
-          avatar δεξιά έμεινε στο 44 (ρητά ζητήθηκε μόνο για το
-          λογότυπο). pt-32 παρακάτω παραμένει ίδιο (και τα δύο ύψη,
-          top-4 ΚΑΙ top-20, χρειάζονται το ίδιο κενό από το περιεχόμενο
-          της σελίδας). ΕΚΚΡΕΜΕΙ ζωντανό οπτικό test σε mobile+desktop,
-          βλ. concerto-testing-checklist.md. */}
+          screenshot): ΑΝΤΙΣΤΡΟΦΗ ύψους — το λογότυπο πάει ΤΩΡΑ στο top-4
+          (εκεί που ήταν το pill πριν), και το pill πάει top-20 (εκεί
+          που ήταν το λογότυπο/avatar πριν) — βλ. παρακάτω. Το λογότυπο
+          (`ConcertoLogo` αριστερά) έγινε επίσης λίγο μεγαλύτερο (size
+          44 → 56, ρητό αίτημα) — ΜΟΝΟ αυτό, το tenant avatar δεξιά
+          έμεινε στο 44 (ρητά ζητήθηκε μόνο για το λογότυπο).
+          23/9, ΤΡΙΤΟ ρητό αίτημα χρήστη (μετά το δεύτερο demo
+          screenshot): το tenant avatar (δεξιά) ΞΑΝΑγύρισε στο top-20
+          (ίδιο ύψος με το pill) — ΜΟΝΟ αυτό, το λογότυπο (αριστερά)
+          έμεινε ψηλά στο top-4. Τελικό αποτέλεσμα: λογότυπο ψηλά
+          αριστερά μόνο του, pill + tenant avatar στο ίδιο (χαμηλότερο)
+          ύψος, δεξιά/κέντρο. pt-36 παρακάτω παραμένει ίδιο (χρειάζεται
+          κενό για το χαμηλότερο, top-20 ζεύγος pill+avatar). ΕΚΚΡΕΜΕΙ
+          ζωντανό οπτικό test σε mobile+desktop, βλ.
+          concerto-testing-checklist.md. */}
       <div className="fixed top-4 left-4 z-40 sm:left-6 lg:left-8">
         <ConcertoLogo size={56} />
       </div>
@@ -164,7 +169,7 @@ export default function FanDashboardLayout() {
           to="/about"
           title={`Πίσω στο ${tenantName}`}
           aria-label={`Πίσω στο ${tenantName}`}
-          className="fixed top-4 right-4 z-40 sm:right-6 lg:right-8"
+          className="fixed top-20 right-4 z-40 sm:right-6 lg:right-8"
         >
           <ConcertoLogo
             src={settings?.logo_url}
