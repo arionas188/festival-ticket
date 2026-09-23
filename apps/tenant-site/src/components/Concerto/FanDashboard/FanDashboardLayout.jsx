@@ -136,21 +136,27 @@ export default function FanDashboardLayout() {
           tenant" avatar βγήκαν ΕΞΩ από το κοινό pill — δύο ΞΕΧΩΡΙΣΤΑ
           floating στοιχεία, αριστερά/δεξιά αντίστοιχα (ίδιο μοτίβο με το
           ConcertoBar.jsx στην αρχική σελίδα του tenant: ξεχωριστά
-          στοιχεία, όχι ενωμένα σε ένα pill). top-20 αντί για το top-4 του
-          pill — ρητά ΠΙΟ ΧΑΜΗΛΑ ώστε να μην στριμώχνονται με το pill όταν
-          προστεθούν κι άλλα icons εκεί στο μέλλον. Και τα δύο πλέον
+          στοιχεία, όχι ενωμένα σε ένα pill). Και τα δύο πλέον
           χρησιμοποιούν το ΙΔΙΟ animated ConcertoLogo.jsx (GSAP floaty
           animation, ήδη σε χρήση στο ConcertoBar.jsx) — το component
           έγινε γενικό (δέχεται προαιρετικό src/ariaLabel, βλ. εκεί) ώστε
           να αποδίδει είτε το λογότυπο Concerto είτε οποιαδήποτε άλλη
           εικόνα (εδώ, το settings.logo_url του tenant) με το ίδιο
           animation, ένα σημείο αλήθειας για την κίνηση αντί για δύο
-          ξεχωριστά implementations. pt-32 παρακάτω (αντί για pt-20)
-          μεγάλωσε ανάλογα ώστε το περιεχόμενο να μην κρύβεται πίσω από
-          αυτά σε στενό (mobile) viewport — ΕΚΚΡΕΜΕΙ ζωντανό οπτικό test
-          σε mobile+desktop, βλ. concerto-testing-checklist.md. */}
-      <div className="fixed top-20 left-4 z-40 sm:left-6 lg:left-8">
-        <ConcertoLogo size={44} />
+          ξεχωριστά implementations.
+          23/9, ΔΕΥΤΕΡΟ ρητό αίτημα χρήστη (μετά το πρώτο demo
+          screenshot): ΑΝΤΙΣΤΡΟΦΗ ύψους — αυτά τα δύο (λογότυπο/avatar)
+          πάνε ΤΩΡΑ στο top-4 (εκεί που ήταν το pill πριν), και το pill
+          πάει top-20 (εκεί που ήταν αυτά τα δύο πριν) — βλ. παρακάτω.
+          Το λογότυπο (`ConcertoLogo` αριστερά) έγινε επίσης λίγο
+          μεγαλύτερο (size 44 → 56, ρητό αίτημα) — ΜΟΝΟ αυτό, το tenant
+          avatar δεξιά έμεινε στο 44 (ρητά ζητήθηκε μόνο για το
+          λογότυπο). pt-32 παρακάτω παραμένει ίδιο (και τα δύο ύψη,
+          top-4 ΚΑΙ top-20, χρειάζονται το ίδιο κενό από το περιεχόμενο
+          της σελίδας). ΕΚΚΡΕΜΕΙ ζωντανό οπτικό test σε mobile+desktop,
+          βλ. concerto-testing-checklist.md. */}
+      <div className="fixed top-4 left-4 z-40 sm:left-6 lg:left-8">
+        <ConcertoLogo size={56} />
       </div>
 
       {tenant && (
@@ -158,7 +164,7 @@ export default function FanDashboardLayout() {
           to="/about"
           title={`Πίσω στο ${tenantName}`}
           aria-label={`Πίσω στο ${tenantName}`}
-          className="fixed top-20 right-4 z-40 sm:right-6 lg:right-8"
+          className="fixed top-4 right-4 z-40 sm:right-6 lg:right-8"
         >
           <ConcertoLogo
             src={settings?.logo_url}
@@ -175,8 +181,9 @@ export default function FanDashboardLayout() {
           του, οπότε "κατεβαίνει μαζί" με τον χρήστη χωρίς αμφιβολία.
           bg-background/70 + backdrop-blur-lg για πιο έντονο "θολό γυαλί"
           — να φαίνονται τα χρώματα του περιεχομένου από κάτω καθώς
-          κάνει scroll. */}
-      <div className="fixed inset-x-0 top-4 z-40 flex justify-center px-4 sm:px-6 lg:px-8">
+          κάνει scroll. 23/9: top-20 (αντί για top-4) — βλ. σχόλιο πάνω
+          για την αντιστροφή ύψους με το λογότυπο/avatar. */}
+      <div className="fixed inset-x-0 top-20 z-40 flex justify-center px-4 sm:px-6 lg:px-8">
         <nav
           aria-label="Πλοήγηση λογαριασμού"
           className="flex w-fit items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1.5 shadow-md backdrop-blur-lg"
@@ -247,7 +254,7 @@ export default function FanDashboardLayout() {
         </nav>
       </div>
 
-      <div className="mx-auto w-full max-w-3xl px-4 pt-32 pb-8 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-3xl px-4 pt-36 pb-8 sm:px-6 lg:px-8">
         <p className="mb-6 text-sm font-semibold text-foreground">Ο λογαριασμός μου</p>
         <Outlet context={{ fanId: user?.id, tenantId: tenant?.id }} />
       </div>
