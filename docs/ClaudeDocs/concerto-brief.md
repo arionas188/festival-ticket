@@ -3284,3 +3284,41 @@ Stripe dashboard" (ενότητα 22/9 παραπάνω) σημειώθηκε ω
 - Δεν έχει σχεδιαστεί ακόμα η ΑΚΡΙΒΗΣ υλοποίηση (webhook vs. polling
   status vs. κάτι άλλο) — μόνο η απαίτηση/κανόνας έχει καταγραφεί εδώ, θα
   αποφασιστεί όταν χτιστεί το ίδιο το checkout.
+
+
+---
+
+## 23/9 — FanDashboardLayout.jsx: λογότυπο Concerto + tenant avatar βγήκαν από το pill, με animation
+
+Ρητό αίτημα χρήστη, με screenshots: το λογότυπο Concerto (αριστερά) και το
+ήδη υπάρχον "πίσω στον tenant" avatar (δεξιά — δείχνει πάντα το
+`settings.logo_url` ΑΥΤΟΥ του tenant, click γυρίζει στο `/about` του) δεν
+είναι πλέον μέσα στο κοινό pill nav του Fan Dashboard — έγιναν δύο
+ξεχωριστά, floating στοιχεία (`top-20`, πιο χαμηλά από το pill που έμεινε
+στο `top-4`) ώστε να μην στριμώχνονται με το pill όταν προστεθούν κι άλλα
+icons εκεί στο μέλλον. Ίδιο μοτίβο με το ήδη υπάρχον `ConcertoBar.jsx`
+στην αρχική σελίδα του tenant (ξεχωριστά στοιχεία, όχι ενωμένα σε ένα
+pill — βλ. "18/9 — ConcertoBar" παραπάνω).
+
+**Ολοκληρώθηκε ένα ήδη σημειωμένο TODO από τις 18/9:** το
+`ConcertoLogo.jsx` (reusable, animated component — GSAP "επιπλέει απαλά")
+χρησιμοποιούνταν μέχρι σήμερα ΜΟΝΟ στο `ConcertoBar.jsx`· στο
+`FanDashboardLayout.jsx` υπήρχε ακόμα η παλιά, στατική (χωρίς animation)
+εικόνα. Το component έγινε **γενικό** (νέα προαιρετικά props
+`src`/`alt`/`ariaLabel`, default στο ίδιο το λογότυπο Concerto — η ήδη
+υπάρχουσα χρήση στο `ConcertoBar.jsx` μένει ΑΚΡΙΒΩΣ ίδια, αμετάβλητη) ώστε
+το ΙΔΙΟ animation να μπορεί να αποδώσει είτε το λογότυπο Concerto είτε
+οποιαδήποτε άλλη εικόνα — εδώ, το `settings.logo_url` του tenant. Ένα
+σημείο αλήθειας για το animation, αντί για δύο ξεχωριστά implementations.
+
+`pt-20` → `pt-32` στο περιεχόμενο της σελίδας (κάτω από το pill) ώστε να
+μην κρύβεται πίσω από τα νέα, χαμηλότερα floating στοιχεία σε στενό
+(mobile) viewport.
+
+`npx eslint .` επιβεβαιώθηκε καθαρό εκτός του ήδη γνωστού baseline (19
+errors, `src/components/ui/*.jsx`) — καμία παλινδρόμηση.
+
+**⚠️ Εκκρεμεί ζωντανό οπτικό test** (mobile ΚΑΙ desktop) — οι ακριβείς
+τιμές θέσης (`top-20`, `pt-32`) επιλέχθηκαν λογικά αλλά ΔΕΝ έχουν
+επιβεβαιωθεί ζωντανά ακόμα σε πραγματικό browser. Βλ. νέο item στο
+`concerto-testing-checklist.md`.

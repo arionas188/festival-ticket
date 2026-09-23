@@ -101,6 +101,13 @@
 - [ ] `FanStripeAccountRoute.jsx`: νέο "merch style" (γκρι πλαίσιο + λευκή κάρτα) αποδίδεται σωστά σε mobile (μόνο desktop ελέγχθηκε μέχρι στιγμής) — (23/9, live-verified ✅ 23/9 desktop)
 - [x] `STRIPE_SECRET_KEY` env var σωστά scoped ως "secret" στο Netlify, ΔΕΝ εκτίθεται πουθενά (UI/logs) — (23/9, live-verified ✅ 23/9)
 
+## Fan Dashboard: λογότυπο Concerto + tenant avatar εκτός pill (23/9)
+- [ ] Λογότυπο Concerto εμφανίζεται αριστερά, χαμηλότερα από το pill, ΚΙΝΕΙΤΑΙ (GSAP floaty animation, ίδιο με ConcertoBar.jsx) — (23/9)
+- [ ] Tenant avatar (settings.logo_url) εμφανίζεται δεξιά, στο ίδιο ύψος με το λογότυπο, ΚΙΝΕΙΤΑΙ με το ίδιο animation, click γυρίζει σωστά στο `/about` του tenant — (23/9)
+- [ ] Mobile viewport (στενό): το περιεχόμενο της σελίδας (pt-32) ΔΕΝ κρύβεται/επικαλύπτεται πίσω από το λογότυπο/avatar — (23/9)
+- [ ] Desktop viewport: λογότυπο/avatar ΔΕΝ επικαλύπτονται με το pill nav από πάνω τους — (23/9)
+- [ ] Tenant χωρίς logo_url (π.χ. ακόμα δεν έχει ανεβάσει λογότυπο): το tenant avatar δεξιά δεν σπάει/δεν δείχνει broken image — (23/9)
+
 ## Γενικά / Regression (πριν από ΚΑΘΕ launch attempt)
 - [ ] `npx eslint .` καθαρό (εκτός των γνωστών, pre-existing errors σε `src/components/ui/*.jsx` — αυτά ΔΕΝ μπλοκάρουν)
 - [ ] `npm run build` καθαρό, χωρίς errors
