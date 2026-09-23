@@ -194,11 +194,26 @@ export default function FanDashboardLayout() {
           bg-background/70 + backdrop-blur-lg για πιο έντονο "θολό γυαλί"
           — να φαίνονται τα χρώματα του περιεχομένου από κάτω καθώς
           κάνει scroll. 23/9: top-20 (αντί για top-4) — βλ. σχόλιο πάνω
-          για την αντιστροφή ύψους με το λογότυπο/avatar. */}
-      <div className="fixed inset-x-0 top-20 z-40 flex justify-center px-4 sm:px-6 lg:px-8">
+          για την αντιστροφή ύψους με το λογότυπο/avatar.
+          23/9, bug (ρητή αναφορά χρήστη — click στο tenant avatar δεξιά
+          δεν πήγαινε πουθενά): ΙΔΙΟ ακριβώς bug με αυτό που ήδη
+          διορθώθηκε στο ConcertoBar.jsx στις 20/9 (βλ. εκεί, "fixed
+          inset-x-0" bug). Αυτό το div είναι "fixed inset-x-0" — η
+          ΚΟΥΤΙ-ΟΡΙΟΘΕΤΗΣΗ του καλύπτει ΟΛΟ το πλάτος της οθόνης σε μια
+          οριζόντια λωρίδα στο top-20, ΑΚΟΜΑ κι εκεί που δεν υπάρχει
+          ορατό περιεχόμενο (π.χ. δεξιά από το ίδιο το pill, ΑΚΡΙΒΩΣ εκεί
+          που κάθεται το tenant avatar — βλ. παραπάνω, ΙΔΙΟ top-20). Ένα
+          στοιχείο χωρίς pointer-events-none δέχεται clicks σε ΟΛΟ του το
+          κουτί, ακόμα κι αν είναι οπτικά διάφανο εκεί — και επειδή αυτό
+          το div ρεντεράρεται ΜΕΤΑ το tenant avatar στο JSX (άρα από πάνω
+          του σε ίδιο z-40), έκλεβε το click πριν προλάβει να φτάσει στο
+          avatar από κάτω. Fix: pointer-events-none σε ΟΛΟ αυτό το div +
+          pointer-events-auto ρητά ΜΟΝΟ στο ίδιο το <nav> (το μόνο
+          πραγματικά interactive στοιχείο μέσα του). */}
+      <div className="pointer-events-none fixed inset-x-0 top-20 z-40 flex justify-center px-4 sm:px-6 lg:px-8">
         <nav
           aria-label="Πλοήγηση λογαριασμού"
-          className="flex w-fit items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1.5 shadow-md backdrop-blur-lg"
+          className="pointer-events-auto flex w-fit items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1.5 shadow-md backdrop-blur-lg"
         >
             <AccountAvatarMenu />
 
