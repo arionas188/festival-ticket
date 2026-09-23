@@ -23,7 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import AccountAvatarMenu from "./AccountAvatarMenu"
-import concertoLogo from "@/assets/images/concerto-logo.jpg"
+import ConcertoLogo from "../ConcertoLogo"
 
 // Fan Dashboard shell — v6 (βλ. concerto-react-router-brief.md, "Sidebar
 // v6 — pill στη θέση του ConcertoBar"): το pill nav (v5) ανέβηκε στη θέση
@@ -32,12 +32,11 @@ import concertoLogo from "@/assets/images/concerto-logo.jpg"
 // με blur ώστε να μην καλύπτει το περιεχόμενο πίσω του καθώς κάνει scroll
 // ο χρήστης μαζί του.
 //
-// Δύο νέα items μέσα στο pill:
-// - Το πραγματικό λογότυπο Concerto (αντί για το προσωρινό "C") — ΧΩΡΙΣ
-//   link προς το παρόν (δεν υπάρχει ακόμα το concertofamily.gr, βλ.
-//   σχόλιο παρακάτω στο ίδιο το JSX).
-// - AccountAvatarMenu — το ΙΔΙΟ dropdown (Προφίλ/Διαγραφή/Αποσύνδεση) που
-//   είχε το ConcertoBar, μετακομισμένο εδώ (own component, βλ. εκεί).
+// AccountAvatarMenu μέσα στο pill — το ΙΔΙΟ dropdown (Προφίλ/Διαγραφή/
+// Αποσύνδεση) που είχε το ConcertoBar, μετακομισμένο εδώ (own component,
+// βλ. εκεί). Το λογότυπο Concerto ΚΑΙ το "πίσω στον tenant" avatar ΔΕΝ
+// είναι πλέον μέσα στο pill (23/9, βλ. σχόλιο παρακάτω στο ίδιο το JSX) —
+// δύο ξεχωριστά, χαμηλότερα floating στοιχεία, αριστερά/δεξιά.
 //
 // Το reactive guard "μη συνδεδεμένος fan → πίσω στο /about" μετακομίζει
 // ΕΔΩ από το ConcertoBar.jsx — πιο φυσική θέση, δίπλα στο route που
@@ -133,6 +132,43 @@ export default function FanDashboardLayout() {
 
   return (
     <div>
+      {/* 23/9, ρητό αίτημα χρήστη: το λογότυπο Concerto και το "πίσω στον
+          tenant" avatar βγήκαν ΕΞΩ από το κοινό pill — δύο ΞΕΧΩΡΙΣΤΑ
+          floating στοιχεία, αριστερά/δεξιά αντίστοιχα (ίδιο μοτίβο με το
+          ConcertoBar.jsx στην αρχική σελίδα του tenant: ξεχωριστά
+          στοιχεία, όχι ενωμένα σε ένα pill). top-20 αντί για το top-4 του
+          pill — ρητά ΠΙΟ ΧΑΜΗΛΑ ώστε να μην στριμώχνονται με το pill όταν
+          προστεθούν κι άλλα icons εκεί στο μέλλον. Και τα δύο πλέον
+          χρησιμοποιούν το ΙΔΙΟ animated ConcertoLogo.jsx (GSAP floaty
+          animation, ήδη σε χρήση στο ConcertoBar.jsx) — το component
+          έγινε γενικό (δέχεται προαιρετικό src/ariaLabel, βλ. εκεί) ώστε
+          να αποδίδει είτε το λογότυπο Concerto είτε οποιαδήποτε άλλη
+          εικόνα (εδώ, το settings.logo_url του tenant) με το ίδιο
+          animation, ένα σημείο αλήθειας για την κίνηση αντί για δύο
+          ξεχωριστά implementations. pt-32 παρακάτω (αντί για pt-20)
+          μεγάλωσε ανάλογα ώστε το περιεχόμενο να μην κρύβεται πίσω από
+          αυτά σε στενό (mobile) viewport — ΕΚΚΡΕΜΕΙ ζωντανό οπτικό test
+          σε mobile+desktop, βλ. concerto-testing-checklist.md. */}
+      <div className="fixed top-20 left-4 z-40 sm:left-6 lg:left-8">
+        <ConcertoLogo size={44} />
+      </div>
+
+      {tenant && (
+        <NavLink
+          to="/about"
+          title={`Πίσω στο ${tenantName}`}
+          aria-label={`Πίσω στο ${tenantName}`}
+          className="fixed top-20 right-4 z-40 sm:right-6 lg:right-8"
+        >
+          <ConcertoLogo
+            src={settings?.logo_url}
+            ariaLabel=""
+            size={44}
+            className="ring-1 ring-border"
+          />
+        </NavLink>
+      )}
+
       {/* fixed αντί για sticky (10/9, βλ. brief) — το sticky δεν έμενε
           ορατό κατά το scroll (πιθανό ancestor/stacking ζήτημα). Το fixed
           είναι πάντα σχετικό με το viewport, ανεξάρτητο από τον γονέα
@@ -145,20 +181,6 @@ export default function FanDashboardLayout() {
           aria-label="Πλοήγηση λογαριασμού"
           className="flex w-fit items-center gap-1 rounded-full border border-border bg-background/70 px-2 py-1.5 shadow-md backdrop-blur-lg"
         >
-            {/* Concerto — ΕΠΙΤΗΔΕΣ χωρίς link προς το παρόν (10/9, ρητό
-                αίτημα χρήστη): δεν υπάρχει ακόμα σελίδα στο
-                concertofamily.gr, οπότε δεν πρέπει να κάνει τίποτα όταν
-                το πατάει κάποιος — μόνο εικόνα. Θα ξαναγίνει link
-                (href="https://concertofamily.gr") όταν υπάρξει
-                πραγματικός προορισμός. */}
-            <div
-              title="Concerto"
-              aria-label="Concerto"
-              className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-foreground"
-            >
-              <img src={concertoLogo} alt="" className="size-full object-cover" />
-            </div>
-
             <AccountAvatarMenu />
 
             {navItems.map((item) => {
@@ -222,28 +244,10 @@ export default function FanDashboardLayout() {
                 </DropdownMenu>
               )
             })}
-
-            {/* Tenant avatar — πίσω στο /about του tenant που άνοιξε το
-                Fan Dashboard (ίδια λειτουργικότητα με το παλιό
-                TenantChip). */}
-            {tenant && (
-              <NavLink
-                to="/about"
-                title={`Πίσω στο ${tenantName}`}
-                aria-label={`Πίσω στο ${tenantName}`}
-                className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-border"
-              >
-                <img
-                  alt=""
-                  src={settings?.logo_url}
-                  className="size-full object-cover"
-                />
-              </NavLink>
-            )}
         </nav>
       </div>
 
-      <div className="mx-auto w-full max-w-3xl px-4 pt-20 pb-8 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-3xl px-4 pt-32 pb-8 sm:px-6 lg:px-8">
         <p className="mb-6 text-sm font-semibold text-foreground">Ο λογαριασμός μου</p>
         <Outlet context={{ fanId: user?.id, tenantId: tenant?.id }} />
       </div>

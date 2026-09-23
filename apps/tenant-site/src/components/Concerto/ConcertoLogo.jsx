@@ -8,8 +8,17 @@ import concertoLogoImg from "@/assets/images/concerto-logo.jpg"
 // ίδιο το project το εγκατέστησε μόλις — `gsap`/`@gsap/react`) ώστε το
 // λογότυπο ΚΑΙ το animation να ζουν σε ΕΝΑ σημείο και να μπορούν να
 // χρησιμοποιηθούν οπουδήποτε χρειάζεται στο app (π.χ. ConcertoBar.jsx,
-// FanDashboardLayout.jsx — το δεύτερο ΔΕΝ άλλαξε ακόμα, εκκρεμεί έγκριση
-// χρήστη μετά το demo, βλ. concerto-brief.md).
+// FanDashboardLayout.jsx).
+//
+// 23/9, ρητό αίτημα χρήστη: το FanDashboardLayout.jsx πλέον χρησιμοποιεί
+// αυτό το component ΚΑΙ για το δικό του λογότυπο Concerto, ΚΑΙ για το
+// "πίσω στον tenant" avatar (ίδιο animation, διαφορετική εικόνα) — γι'
+// αυτό το component έγινε γενικό: `src`/`alt`/`ariaLabel` προαιρετικά,
+// default στο ίδιο το λογότυπο Concerto ώστε η ΗΔΗ υπάρχουσα χρήση στο
+// ConcertoBar.jsx να μένει ΑΚΡΙΒΩΣ ίδια, αμετάβλητη. `ariaLabel=""`
+// αφαιρεί εντελώς το aria-label (π.χ. όταν το component ζει ήδη μέσα σε
+// έναν γονέα NavLink που έχει το δικό του, σωστό aria-label — αποφυγή
+// διπλού/λάθος label).
 //
 // Animation: ρητή περιγραφή χρήστη — "να κινείται μέσα σε έναν χώρο απαλά
 // χωρίς να αποσπά την προσοχή". Αργή (3.4s), μικρό εύρος κίνησης
@@ -20,8 +29,15 @@ import concertoLogoImg from "@/assets/images/concerto-logo.jpg"
 // να το κάνουμε εμείς χειροκίνητα.
 //
 // Προσβασιμότητα: σέβεται prefers-reduced-motion — αν ο χρήστης έχει
-// ζητήσει λιγότερη κίνηση στο λειτουργικό του, το λογότυπο μένει ακίνητο.
-export default function ConcertoLogo({ size = 44, className }) {
+// ζητήσει λιγότερη κίνηση στο λειτουργικό του, το λογότυπο/avatar μένει
+// ακίνητο.
+export default function ConcertoLogo({
+  size = 44,
+  className,
+  src = concertoLogoImg,
+  alt = "",
+  ariaLabel = "Concerto",
+}) {
   const circleRef = useRef(null)
 
   useGSAP(() => {
@@ -44,14 +60,14 @@ export default function ConcertoLogo({ size = 44, className }) {
   return (
     <div
       ref={circleRef}
-      aria-label="Concerto"
+      aria-label={ariaLabel || undefined}
       className={cn(
         "flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-foreground",
         className
       )}
       style={{ width: size, height: size }}
     >
-      <img src={concertoLogoImg} alt="" className="size-full object-cover" />
+      <img src={src} alt={alt} className="size-full object-cover" />
     </div>
   )
 }
