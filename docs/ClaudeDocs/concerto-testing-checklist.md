@@ -91,6 +91,16 @@
 - [ ] Πεδίο ώρας στη φόρμα προϊόντος δέχεται ΜΟΝΟ 24ωρη μορφή (π.χ. 21:00), χωρίς AM/PM επιλογή — (20/9)
 - [ ] Συμπλήρωση μόνο ημερομηνίας ΧΩΡΙΣ ώρα (ή αντίστροφα) δίνει σαφές validation error, δεν αφήνει να υποβληθεί μισό — (20/9)
 
+## Stripe Connect Onboarding + Netlify Functions (23/9)
+- [ ] Netlify Function `stripe-connect-onboarding` απαντάει (όχι 404/502) μετά από deploy — (23/9, live-verified ✅ 23/9 — έφτασε σε 502 real-error στάδιο, μετά σε πραγματικό success μετά το v2 fix)
+- [ ] Κλικ "Σύνδεσε το Stripe σου" δημιουργεί Stripe account (v2) + account link χωρίς σφάλμα — (23/9)
+- [ ] Redirect σε πραγματική Stripe-hosted onboarding σελίδα (Account Links, ΟΧΙ OAuth) — (23/9, live-verified ✅ 23/9 — έφτασε στη σελίδα, δεν ολοκληρώθηκε ακόμα η φόρμα)
+- [ ] Ολοκλήρωση onboarding φόρμας στο Stripe (test data) επιστρέφει σωστά στο `return_url` (`/account/stripe`) — **TODO, δεν έχει δοκιμαστεί ακόμα ολοκληρωμένο** — (23/9)
+- [ ] Ξαναπάτημα του κουμπιού μετά από ημιτελές onboarding ΔΕΝ δημιουργεί δεύτερο Stripe account (ξαναχρησιμοποιεί το ίδιο αποθηκευμένο `stripe_account_id`) — (23/9)
+- [ ] Μετά από επιτυχές onboarding, το status στο UI (`FanStripeAccountRoute.jsx`) ενημερώνεται σωστά — **⚠️ πιθανό bug: `useTenantStripeStatus.js` πιθανώς διαβάζει ακόμα το παλιό v1 `charges_enabled` shape αντί για το νέο v2** — (23/9)
+- [ ] `FanStripeAccountRoute.jsx`: νέο "merch style" (γκρι πλαίσιο + λευκή κάρτα) αποδίδεται σωστά σε mobile (μόνο desktop ελέγχθηκε μέχρι στιγμής) — (23/9, live-verified ✅ 23/9 desktop)
+- [x] `STRIPE_SECRET_KEY` env var σωστά scoped ως "secret" στο Netlify, ΔΕΝ εκτίθεται πουθενά (UI/logs) — (23/9, live-verified ✅ 23/9)
+
 ## Γενικά / Regression (πριν από ΚΑΘΕ launch attempt)
 - [ ] `npx eslint .` καθαρό (εκτός των γνωστών, pre-existing errors σε `src/components/ui/*.jsx` — αυτά ΔΕΝ μπλοκάρουν)
 - [ ] `npm run build` καθαρό, χωρίς errors

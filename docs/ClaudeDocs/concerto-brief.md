@@ -3130,9 +3130,9 @@ Netlify bandwidth), όχι προληπτικά.
 ### Testing Checklist (user's responsibility, όχι χτίστηκε)
 
 - [ ] Δημιουργία test Stripe account
-- [ ] Configuration OAuth app στο Stripe dashboard
-- [ ] Netlify deploy (push main → auto-deploy)
-- [ ] Live test: artist connects Stripe account via UI
+- [ ] Configuration OAuth app στο Stripe dashboard — **⚠️ 23/9: ξεπερασμένο item, το flow ΔΕΝ είναι OAuth — βλ. ενότητα "23/9 — Διευκρίνιση ορολογίας" παρακάτω, δεν υπάρχει "OAuth app" να ρυθμιστεί**
+- [x] Netlify deploy (push main → auto-deploy) — επιβεβαιώθηκε 23/9, μετά το bug fix του base directory (βλ. "23/9 — Bug fix" παρακάτω)
+- [ ] Live test: artist connects Stripe account via UI — **σε εξέλιξη 23/9: έφτασε σε πραγματική Stripe-hosted onboarding σελίδα, ΔΕΝ έχει ολοκληρωθεί ακόμα η φόρμα — βλ. "23/9 — Κατάσταση live testing" παρακάτω**
 - [ ] Callback redirect works correctly
 - [ ] Database row created με σωστό account ID
 - [ ] News posts can be created + liked by fans
@@ -3170,3 +3170,60 @@ Netlify bandwidth), όχι προληπτικά.
 - `dashboard: "full"` + `defaults.responsibilities.fees_collector/losses_collector: "stripe"` = το v2 ισοδύναμο του παλιού `type: "standard"`.
 
 **Εκκρεμεί/επόμενο βήμα (ΔΕΝ έγινε σήμερα, out of scope):** το `useTenantStripeStatus.js`/`tenant_settings.stripe_charges_enabled` πεδίο πιθανώς χρειάζεται να ενημερωθεί ώστε να διαβάζει το status από τη νέα v2 shape (`configuration.merchant.capabilities.card_payments.status`) αντί για το παλιό v1 `charges_enabled` boolean — θα το δούμε μόλις φανεί πρόβλημα στο status display μετά από επιτυχημένο onboarding.
+
+
+---
+
+## 23/9 — FanStripeAccountRoute.jsx: επανασχεδίαση σε merch style
+
+Ρητό αίτημα χρήστη: το component να ακολουθεί το ίδιο οπτικό στυλ με το Merch
+section (`ProductFormPage.jsx`/`ProductOverviewRoute.jsx`) — αντικαταστάθηκε
+το γενικό shadcn `Card`/`CardHeader`/`CardTitle`/`CardContent` με το
+καθιερωμένο μοτίβο: εξωτερικό γκρι πλαίσιο (`rounded-2xl bg-gray-50 p-4
+sm:p-6`) γύρω από εσωτερική λευκή bordered κάρτα (`rounded-xl border
+border-gray-200 p-4 shadow-sm sm:p-5`). Καμία αλλαγή λειτουργικότητας/λογικής
+— μόνο markup/classes. Επιβεβαιώθηκε ζωντανά (screenshot, desktop) ότι
+αποδίδεται σωστά.
+
+---
+
+## 23/9 — Διευκρίνιση ορολογίας: το flow είναι Stripe Connect Onboarding (Account Links), ΟΧΙ OAuth
+
+Η αρχική περιγραφή στην ενότητα "22/9 — Stripe Connect Integration &
+Netlify Functions" παραπάνω ("OAuth flow (Stripe Connect)") είναι ανακριβής
+ορολογία, ξεπερασμένη από το πραγματικό migration σε v2 (βλ. "23/9 — Bug fix
+#2" παραπάνω): αυτό που χτίστηκε και τρέχει σήμερα είναι Stripe-hosted
+**Connect Onboarding** μέσω **Account Links**
+(`stripe.v2.core.accountLinks.create`), ΟΧΙ OAuth redirect/authorize flow.
+Πρακτικά η εμπειρία για τον χρήστη είναι παρόμοια (redirect σε Stripe-hosted
+σελίδα, επιστροφή μέσω `return_url`/`refresh_url`), αλλά ο μηχανισμός από
+κάτω είναι διαφορετικός — καμία αλλαγή κώδικα απαιτείται, μόνο διόρθωση
+τεκμηρίωσης ώστε μελλοντικός dev/AI να μην ψάξει για OAuth callback route
+που δεν υπάρχει. Το testing checklist item "Configuration OAuth app στο
+Stripe dashboard" (ενότητα 22/9 παραπάνω) σημειώθηκε ως ξεπερασμένο για τον
+ίδιο λόγο.
+
+---
+
+## 23/9 — Κατάσταση live testing (μέχρι στιγμής, ΜΗ ολοκληρωμένο)
+
+- **Function deploy:** επιβεβαιώθηκε — το 404 έγινε 502 μετά το root
+  `netlify.toml` fix (το function πλέον βρίσκεται/εκτελείται, βλ. "23/9 —
+  Bug fix" παραπάνω).
+- **`STRIPE_SECRET_KEY`:** σωστά ρυθμισμένο ως secret env var στο Netlify
+  (μετά από δύο γύρους διόρθωσης — αρχικά λάθος/ασαφές όνομα μεταβλητής,
+  μετά σωστή δημιουργία με "Contains secret values" τσεκαρισμένο, ΟΧΙ
+  αποτσεκαρισμένο όπως λανθασμένα προτάθηκε αρχικά). Είναι το **test** key
+  (`sk_test_...`), ΟΧΙ live/production.
+- Μετά τη διόρθωση #2 (v2 migration), ο χρήστης έφτασε σε πραγματική
+  Stripe-hosted onboarding σελίδα (θετικό σημάδι, function → Stripe API →
+  account link → redirect δουλεύουν end-to-end μέχρι εκεί) — **δεν έχει
+  ακόμα επιβεβαιωθεί η επιτυχής ολοκλήρωση** της φόρμας onboarding στο
+  Stripe, ούτε ένα καθαρό, χωρίς-σφάλμα test μετά το τελευταίο deploy.
+- **`useTenantStripeStatus.js`/`tenant_settings.stripe_charges_enabled`:**
+  πιθανώς χρειάζεται update ώστε να διαβάζει το v2 status shape (βλ. "23/9
+  — Bug fix #2" παραπάνω) — ΔΕΝ έχει ελεγχθεί ακόμα, μόνο υποψία/σημείωση.
+
+**Επόμενα βήματα (χρήστη):** ολοκλήρωση onboarding φόρμας στο Stripe (test
+δεδομένα), επιβεβαίωση σωστής επιστροφής στο `/account/stripe`, έλεγχος αν
+το status στο UI ενημερώνεται σωστά μετά την ολοκλήρωση.
