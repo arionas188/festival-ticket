@@ -3153,3 +3153,20 @@ Netlify bandwidth), όχι προληπτικά.
 **Fix:** Νέο `netlify.toml` στη **ΡΙΖΑ** του repo με `[functions] directory = "apps/tenant-site/netlify/functions"` (path σχετικό με root). Το παλιό `apps/tenant-site/netlify.toml` κρατήθηκε (όχι διαγραφή) αλλά άδειασε από directives — έχει μόνο επεξηγηματικό σχόλιο για μελλοντική αναφορά. Base directory / Build command / Publish directory ΔΕΝ πειράχτηκαν — ήδη δούλευαν σωστά από το dashboard.
 
 **Εκκρεμεί:** Push + νέο production deploy για να επιβεβαιωθεί ζωντανά (πρόσεξε το banner "operational credits" από 22/9 — μπορεί να χρειάζεται upgrade πριν επιτραπεί νέο production deploy).
+
+---
+
+## 23/9 — Bug fix #2: Stripe Accounts v1 αποσύρθηκε, migration σε v2
+
+**Σύμπτωμα (μετά το fix του 404):** το function πλέον βρισκόταν/έτρεχε (502 → πραγματικό error αντί για routing 404), αλλά έσκαγε με `StripeInvalidRequestError`: *"Stripe no longer recommends Accounts v1 for new Connect integrations."*
+
+**Αιτία:** ο κώδικας χρησιμοποιούσε `stripe.accounts.create({ type: 'standard' })` (Accounts v1) — το Stripe το απέσυρε πλέον για ΝΕΕΣ Connect ενσωματώσεις (existing v1 accounts συνεχίζουν κανονικά, μόνο η δημιουργία νέων μπλοκάρεται).
+
+**Fix:** migration σε Accounts v2 (`stripe.v2.core.accounts.create`) + Account Links v2 (`stripe.v2.core.accountLinks.create`) στο `stripe-connect-onboarding.mjs`. Έρευνα στην επίσημη τεκμηρίωση Stripe (docs.stripe.com/connect/accounts-v2) πριν την αλλαγή — όχι μάντεμα, θέμα πληρωμών.
+
+**Δύο ρητές, νέες αποφάσεις (v2 απαιτεί πεδία που το v1 άφηνε προαιρετικά):**
+- `identity.country` **hardcoded σε `"gr"`** — το v2 API το απαιτεί υποχρεωτικά στη δημιουργία (το v1 το άφηνε κενό, το συμπλήρωνε ο tenant μέσα στο Stripe onboarding). Αφού το Concerto απευθύνεται σε Ελληνικά συγκροτήματα (€, ελληνικό UI παντού), θεωρήθηκε ασφαλής προσωρινή τιμή. **Αν ποτέ χρειαστεί tenant εκτός Ελλάδας, αυτό θα χρειαστεί να γίνει επιλογή στη φόρμα.**
+- `contact_email` — υποχρεωτικό πλέον, χρησιμοποιεί το ήδη-επιβεβαιωμένο `userData.user.email` του συνδεδεμένου tenant admin (καμία νέα φόρμα).
+- `dashboard: "full"` + `defaults.responsibilities.fees_collector/losses_collector: "stripe"` = το v2 ισοδύναμο του παλιού `type: "standard"`.
+
+**Εκκρεμεί/επόμενο βήμα (ΔΕΝ έγινε σήμερα, out of scope):** το `useTenantStripeStatus.js`/`tenant_settings.stripe_charges_enabled` πεδίο πιθανώς χρειάζεται να ενημερωθεί ώστε να διαβάζει το status από τη νέα v2 shape (`configuration.merchant.capabilities.card_payments.status`) αντί για το παλιό v1 `charges_enabled` boolean — θα το δούμε μόλις φανεί πρόβλημα στο status display μετά από επιτυχημένο onboarding.
