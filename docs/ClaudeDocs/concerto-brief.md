@@ -3227,3 +3227,30 @@ Stripe dashboard" (ενότητα 22/9 παραπάνω) σημειώθηκε ω
 **Επόμενα βήματα (χρήστη):** ολοκλήρωση onboarding φόρμας στο Stripe (test
 δεδομένα), επιβεβαίωση σωστής επιστροφής στο `/account/stripe`, έλεγχος αν
 το status στο UI ενημερώνεται σωστά μετά την ολοκλήρωση.
+
+
+---
+
+## 23/9 — Σημείωση handoff προς επόμενο AI session: αύριο live test Stripe onboarding
+
+Ο χρήστης αλλάζει AI session εδώ — το brief/docs είναι ενημερωμένα (commit
+`e8b020b`), οπότε η επόμενη session μπορεί να ξεκινήσει κατευθείαν από εδώ,
+χωρίς επανάληψη ολόκληρου του context.
+
+**Τι εκκρεμεί, ακριβώς:** αύριο ο χρήστης θα κάνει το ζωντανό (live) test
+της ολοκλήρωσης του Stripe Connect onboarding flow. Πλήρες context στην
+ενότητα "23/9 — Κατάσταση live testing (μέχρι στιγμής, ΜΗ ολοκληρωμένο)"
+παραπάνω — διάβασέ την πρώτη πριν ξεκινήσεις. Συνοπτικά τι μένει να
+ελεγχθεί:
+- Ολοκλήρωση της φόρμας onboarding στο Stripe (test δεδομένα) μέχρι το
+  τέλος.
+- Σωστή επιστροφή στο `/account/stripe` μέσω του `return_url`.
+- Αν το status στο UI (`FanStripeAccountRoute.jsx`) ενημερώνεται σωστά
+  μετά την ολοκλήρωση — **ύποπτο σημείο**: το `useTenantStripeStatus.js`/
+  `tenant_settings.stripe_charges_enabled` πιθανώς διαβάζει ακόμα το παλιό
+  v1 `charges_enabled` shape αντί για το νέο v2 (`configuration.merchant.
+  capabilities.card_payments.status`) — αν το status δεν φανεί σωστά μετά
+  το onboarding, ξεκίνα το debugging από εκεί.
+- Ό,τι άλλο σφάλμα/απρόοπτο προκύψει κατά το testing — δες τα σχετικά
+  testing-checklist items στο `concerto-testing-checklist.md`, ενότητα
+  "Stripe Connect Onboarding + Netlify Functions (23/9)".
