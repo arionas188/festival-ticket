@@ -156,7 +156,14 @@ export default function FanDashboardLayout() {
           (ίδιο ύψος με το pill) — ΜΟΝΟ αυτό, το λογότυπο (αριστερά)
           έμεινε ψηλά στο top-4. Τελικό αποτέλεσμα: λογότυπο ψηλά
           αριστερά μόνο του, pill + tenant avatar στο ίδιο (χαμηλότερο)
-          ύψος, δεξιά/κέντρο. pt-36 παρακάτω παραμένει ίδιο (χρειάζεται
+          ύψος, δεξιά/κέντρο.
+          23/9, ΤΕΤΑΡΤΟ ρητό αίτημα χρήστη: το tenant avatar μεγάλωσε
+          (size 44 → 56, ίδιο μέγεθος με το λογότυπο πλέον) για καλύτερη
+          ανάλυση/ευκρίνεια της εικόνας. Η λειτουργικότητα "πίσω στον
+          tenant που έχει αυτή την εικόνα" (`to="/about"`,
+          `src={settings?.logo_url}`) ΔΕΝ είχε ποτέ αφαιρεθεί σε κανένα
+          από τα προηγούμενα demo — υπήρχε ήδη, αμετάβλητη, σε όλους
+          τους παραπάνω γύρους. pt-36 παρακάτω παραμένει ίδιο (χρειάζεται
           κενό για το χαμηλότερο, top-20 ζεύγος pill+avatar). ΕΚΚΡΕΜΕΙ
           ζωντανό οπτικό test σε mobile+desktop, βλ.
           concerto-testing-checklist.md. */}
@@ -174,7 +181,7 @@ export default function FanDashboardLayout() {
           <ConcertoLogo
             src={settings?.logo_url}
             ariaLabel=""
-            size={44}
+            size={56}
             className="ring-1 ring-border"
           />
         </NavLink>
