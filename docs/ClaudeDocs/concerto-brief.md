@@ -3322,3 +3322,45 @@ errors, `src/components/ui/*.jsx`) — καμία παλινδρόμηση.
 τιμές θέσης (`top-20`, `pt-32`) επιλέχθηκαν λογικά αλλά ΔΕΝ έχουν
 επιβεβαιωθεί ζωντανά ακόμα σε πραγματικό browser. Βλ. νέο item στο
 `concerto-testing-checklist.md`.
+
+
+## Baseline schema migration + squash των 31 migrations (25/9)
+
+**Γιατί (ρητό αίτημα χρήστη):** για να στηθούν πραγματικά integration tests
+(RPC/stock — create_order_from_cart/expire_stale_orders) πάνω σε πραγματική
+Postgres μέσα σε CI, χρειαζόταν ο φάκελος `supabase/migrations/` να αρκεί
+ΜΟΝΟΣ ΤΟΥ για να ξαναχτιστεί η βάση από το μηδέν. Δεν αρκούσε: τα θεμελιώδη
+tables (tenants, fans, products, cart_items, tenant_settings, tenant_admins,
+events, tickets, favorites) είχαν φτιαχτεί απευθείας στο Supabase dashboard,
+ποτέ μέσα σε migration.
+
+**Τι έγινε:**
+1. `supabase db dump --linked --schema public` πάνω στο ζωντανό production
+   project → πραγματικό, τρέχον στιγμιότυπο του public schema.
+2. Συμπληρώθηκε χειροκίνητα (διαβάστηκαν όλα τα 31 παλιά migration αρχεία
+   για να επιβεβαιωθεί τι χρειάζεται) με ό,τι ζει ΕΚΤΟΣ public schema και
+   άρα δεν το έπιασε το dump: extensions (pgcrypto/pg_cron/pg_net), storage
+   buckets + RLS (tenant-images, tenant-posts), vault bootstrap
+   (fan_pii_encryption_key), pg_cron jobs (delete-expired-events,
+   expire-stale-orders, expire-tenant-posts).
+3. Νέο αρχείο: `supabase/migrations/20260925000000_baseline_schema.sql`.
+4. Τα 31 παλιά migration αρχεία ΔΕΝ διαγράφηκαν — μετακινήθηκαν στο
+   `supabase/migrations_archive/` (με README που εξηγεί γιατί, βλ. εκεί).
+5. **Πραγματική επικύρωση (Docker, όχι θεωρητικά):**
+   - Πρώτο test: bare Postgres container → βρέθηκε πραγματικό bug (η σειρά
+     functions-πριν-από-tables του pg_dump έσκαγε σε SQL-language function
+     `check_own_display_name_available`) → διορθώθηκε (tables πρώτα).
+   - Δεύτερο test (μετά το fix): bare Postgres → public schema (tables/
+     functions/RLS/grants — ΑΚΡΙΒΩΣ ό,τι χρειάζονται τα RPC/stock tests)
+     πέρασε 100% καθαρό.
+   - Τρίτο test: πλήρες `supabase start` (real Docker stack, τοπικά στον
+     Mac του χρήστη) → **πέρασε πλήρως, καμία αλλαγή χρειάστηκε** —
+     επιβεβαιώνει ΚΑΙ το storage/vault/cron section.
+
+**⚠️ Εκκρεμές, σημαντικό βήμα πριν το επόμενο `supabase db push` στο
+production:** πρέπει να τρέξει
+`npx supabase migration repair 20260925000000 --status applied` πάνω στο
+linked production project, ώστε το Supabase migration tracking να μάθει ότι
+αυτό το αρχείο θεωρείται ήδη εφαρμοσμένο (production ήδη έχει ΑΚΡΙΒΩΣ αυτό
+το schema) — αλλιώς ο επόμενος `db push` θα προσπαθήσει να ΞΑΝΑτρέξει το
+baseline πάνω στο production και θα σκάσει με "already exists" errors.

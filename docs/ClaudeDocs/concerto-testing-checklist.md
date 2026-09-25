@@ -108,6 +108,14 @@
 - [ ] Desktop viewport: λογότυπο/avatar ΔΕΝ επικαλύπτονται με το pill nav από πάνω τους — (23/9)
 - [ ] Tenant χωρίς logo_url (π.χ. ακόμα δεν έχει ανεβάσει λογότυπο): το tenant avatar δεξιά δεν σπάει/δεν δείχνει broken image — (23/9)
 
+## Baseline schema migration + CI foundations (25/9)
+
+- [ ] `supabase/migrations/20260925000000_baseline_schema.sql` εφαρμόστηκε καθαρά σε bare Postgres (Docker) — (25/9, επιβεβαιωμένο)
+- [ ] `supabase/migrations/20260925000000_baseline_schema.sql` εφαρμόστηκε καθαρά σε πλήρες `supabase start` stack (storage/vault/cron) — (25/9, επιβεβαιωμένο)
+- [ ] Production project: τρέχει `supabase migration repair 20260925000000 --status applied` ΠΡΙΝ το επόμενο `supabase db push` — (εκκρεμές)
+- [ ] Μετά το repair: δοκιμαστικό `supabase db push --dry-run` (ή αντίστοιχο) πάνω στο production επιβεβαιώνει ότι δεν προσπαθεί να ξανατρέξει το baseline
+- [ ] `supabase/migrations_archive/` περιέχει τα 31 παλιά αρχεία + README + raw dump — τίποτα δεν διαγράφηκε
+
 ## Γενικά / Regression (πριν από ΚΑΘΕ launch attempt)
 - [ ] `npx eslint .` καθαρό (εκτός των γνωστών, pre-existing errors σε `src/components/ui/*.jsx` — αυτά ΔΕΝ μπλοκάρουν)
 - [ ] `npm run build` καθαρό, χωρίς errors
